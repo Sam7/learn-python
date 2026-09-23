@@ -102,6 +102,16 @@ test('the available learning path reaches the next chapter', async ({ page, brow
       if (lesson.button === 'Next chapter') {
         await expect(page.locator('.cm-content')).toContainText('input')
         await expect(page.locator('.cm-content')).not.toContainText('favourite_food')
+        await page.reload()
+        await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
+        const completedModule = page.getByRole('button', { name: /Getting Python to do things/ })
+        await expect(completedModule).toHaveAttribute('aria-expanded', 'true')
+        await expect(page.getByRole('button', { name: 'Hello Python' })).toBeVisible()
+        await page.getByRole('button', { name: 'Hello Python' }).click()
+        await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
+        await page.getByRole('button', { name: /Talking to the user/ }).click()
+        await page.getByRole('button', { name: 'Ask a question' }).click()
+        await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
         await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-next-chapter.png`, fullPage: true })
       }
     }
@@ -236,6 +246,13 @@ test('tablet layout stays reachable without horizontal page overflow', async ({ 
     const navigatorDialog = page.getByRole('dialog', { name: 'Choose a lesson' })
     await expect(navigatorDialog).toBeVisible()
     await expect(navigatorDialog.getByText('Getting Python to do things')).toBeVisible()
+    const fundamentalsToggle = navigatorDialog.getByRole('button', { name: /Getting Python to do things/ })
+    await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
+    await fundamentalsToggle.click()
+    await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(navigatorDialog.getByRole('button', { name: 'Hello Python' })).toHaveCount(0)
+    await fundamentalsToggle.click()
+    await expect(navigatorDialog.getByRole('button', { name: 'Hello Python' })).toBeVisible()
     await page.getByRole('button', { name: 'Close curriculum' }).last().click()
     await expect(page.getByRole('dialog', { name: 'Choose a lesson' })).toHaveCount(0)
   }

@@ -26,36 +26,63 @@ interface ModuleSectionProps {
   module: Module
   currentLessonId: string
   completedLessonIds: string[]
+  isExpanded: boolean
   onSelect: (lessonId: string) => void
+  onToggle: () => void
   onNavigate?: () => void
 }
 
-function ModuleSection({ module, currentLessonId, completedLessonIds, onSelect, onNavigate }: ModuleSectionProps) {
+function ModuleSection({
+  module,
+  currentLessonId,
+  completedLessonIds,
+  isExpanded,
+  onSelect,
+  onToggle,
+  onNavigate,
+}: ModuleSectionProps) {
   const progress = getModuleProgress(module, completedLessonIds)
   const isCurrentModule = module.lessons.some((lesson) => lesson.id === currentLessonId)
+  const lessonsId = `module-lessons-${module.id}`
 
   return (
     <section className={cn('rounded-2xl', isCurrentModule && 'bg-mist/65 p-2')} aria-labelledby={`module-${module.id}`}>
-      <div className={cn('flex items-start gap-3', isCurrentModule ? 'px-2 pb-2' : 'px-2 py-2')}>
+      <button
+        type="button"
+        className={cn(
+          'flex w-full items-start gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2',
+          isCurrentModule ? 'px-2 pb-2' : 'px-2 py-2',
+        )}
+        aria-expanded={isExpanded}
+        aria-controls={lessonsId}
+        onClick={onToggle}
+      >
         <span className={cn(
           'flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold',
           isCurrentModule ? 'bg-teal text-white' : 'bg-white text-muted ring-1 ring-line',
         )} aria-hidden="true">
           {String(module.order).padStart(2, '0')}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h2 id={`module-${module.id}`} className="text-sm font-bold leading-5 text-ink">{module.title}</h2>
-            {progress.isComplete ? <Check size={15} className="mt-0.5 shrink-0 text-teal" aria-label="Module complete" /> : null}
-          </div>
-          <p className="mt-0.5 text-xs leading-5 text-muted">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-start justify-between gap-2">
+            <span id={`module-${module.id}`} className="text-sm font-bold leading-5 text-ink">{module.title}</span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {progress.isComplete ? <Check size={15} className="mt-0.5 text-teal" aria-label="Module complete" /> : null}
+              <ChevronDown
+                size={15}
+                className={cn('mt-0.5 text-muted transition-transform', !isExpanded && '-rotate-90')}
+                aria-hidden="true"
+              />
+            </span>
+          </span>
+          <span className="mt-0.5 block text-xs leading-5 text-muted">
             {progress.availableCount > 0 ? `${progress.completedCount}/${progress.availableCount} ready` : 'Coming soon'}
-          </p>
-        </div>
-      </div>
+          </span>
+        </span>
+      </button>
 
-      {isCurrentModule ? (
-        <div className="space-y-1" role="list" aria-label={`${module.title} lessons`}>
+      {isExpanded ? (
+        <div id={lessonsId} className="space-y-1" role="group" aria-label={`${module.title} lessons`}>
           {module.lessons.map((lesson) => {
             const isCompleted = completedLessonIds.includes(lesson.id)
             const isCurrent = currentLessonId === lesson.id
@@ -66,7 +93,6 @@ function ModuleSection({ module, currentLessonId, completedLessonIds, onSelect, 
               <button
                 key={lesson.id}
                 type="button"
-                role="listitem"
                 disabled={!isOpen}
                 onClick={() => {
                   if (isOpen) {
@@ -105,10 +131,20 @@ function ModuleSection({ module, currentLessonId, completedLessonIds, onSelect, 
 
 interface NavigatorContentProps extends Omit<CurriculumNavigatorProps, 'curriculum'> {
   curriculum: Curriculum
+  expandedModuleIds: Set<string>
+  onToggleModule: (moduleId: string) => void
   onNavigate?: () => void
 }
 
-function NavigatorContent({ curriculum, currentLessonId, completedLessonIds, onSelect, onNavigate }: NavigatorContentProps) {
+function NavigatorContent({
+  curriculum,
+  currentLessonId,
+  completedLessonIds,
+  expandedModuleIds,
+  onToggleModule,
+  onSelect,
+  onNavigate,
+}: NavigatorContentProps) {
   return (
     <div className="space-y-2">
       {curriculum.modules.map((module) => (
@@ -117,7 +153,9 @@ function NavigatorContent({ curriculum, currentLessonId, completedLessonIds, onS
           module={module}
           currentLessonId={currentLessonId}
           completedLessonIds={completedLessonIds}
+          isExpanded={expandedModuleIds.has(module.id)}
           onSelect={onSelect}
+          onToggle={() => onToggleModule(module.id)}
           onNavigate={onNavigate}
         />
       ))}
@@ -130,6 +168,29 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
   const location = getLessonLocation(currentLessonId)
   const currentModule = location?.module ?? curriculum.modules[0]
   const currentLesson = location?.lesson ?? currentModule.lessons[0]
+  const [moduleExpansionOverrides, setModuleExpansionOverrides] = useState<Record<string, boolean>>({})
+
+  const isModuleExpandedByDefault = (module: Module) => (
+    module.id === currentModule?.id || getModuleProgress(module, completedLessonIds).isComplete
+  )
+
+  const isModuleExpanded = (module: Module) => (
+    moduleExpansionOverrides[module.id] ?? isModuleExpandedByDefault(module)
+  )
+
+  const expandedModuleIds = new Set(
+    curriculum.modules.filter(isModuleExpanded).map((module) => module.id),
+  )
+
+  const toggleModule = (moduleId: string) => {
+    const module = curriculum.modules.find((item) => item.id === moduleId)
+    if (!module) return
+    const currentlyExpanded = isModuleExpanded(module)
+    setModuleExpansionOverrides((overrides) => ({
+      ...overrides,
+      [moduleId]: !currentlyExpanded,
+    }))
+  }
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -151,6 +212,8 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
           curriculum={curriculum}
           currentLessonId={currentLessonId}
           completedLessonIds={completedLessonIds}
+          expandedModuleIds={expandedModuleIds}
+          onToggleModule={toggleModule}
           onSelect={onSelect}
         />
       </aside>
@@ -193,6 +256,8 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
               curriculum={curriculum}
               currentLessonId={currentLessonId}
               completedLessonIds={completedLessonIds}
+              expandedModuleIds={expandedModuleIds}
+              onToggleModule={toggleModule}
               onSelect={onSelect}
               onNavigate={() => setIsOpen(false)}
             />
