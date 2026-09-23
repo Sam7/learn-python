@@ -14,7 +14,7 @@
 - [x] Python input infrastructure: repeated interactive prompts and transcript fallback (course introduction is Stage 2)
 - [x] Stage 1 — Values and Expressions (eight lessons)
 - [x] Stage 2 — Names, State, and Input (ten lessons)
-- [ ] Stage 3 — Decisions (ten lessons)
+- [x] Stage 3 — Decisions (ten lessons)
 - [ ] Stage 4 — Repetition and Time (ten lessons)
 - [ ] Stage 5 — Collections (nine lessons)
 - [ ] Stage 6 — Functions and Abstraction (ten lessons)
@@ -31,7 +31,7 @@
 
 - Pyodide is loaded from a pinned CDN URL behind the `PythonRunner` boundary so it can be self-hosted later.
 - Curriculum content is plain data: ordered lessons contain ordered steps, short content blocks, and at most one reusable activity per step. The application shell does not know lesson-specific rules.
-- Curriculum stages and lesson data are owned by `src/curriculum/stages/`; generic learning components render activities while progression and assessment operate on typed definitions. Stages 0, 1, and 2 are ready. Later stage/lesson IDs and titles mirror the source specification and remain unavailable until their full learning journeys are authored.
+- Curriculum stages and lesson data are owned by `src/curriculum/stages/`; generic learning components render activities while progression and assessment operate on typed definitions. Stages 0–3 are ready. Later stage/lesson IDs and titles mirror the source specification and remain unavailable until their full learning journeys are authored.
 - The progress repository accepts the complete curriculum so saved code remains compatible with future lessons while current/completed navigation only uses available lessons.
 - The page uses natural document scrolling with `min-height: 100dvh` rather than trapping the learner in a fixed-height editor workspace.
 - Local UI primitives follow shadcn/ui conventions and are deliberately small for this focused product.
@@ -39,7 +39,7 @@
 - Code activities are assessed on Run; deterministic choice and arrange-code activities assess on response. Prediction and trace activities use real worker execution. Optional reflections are saved but never gate progression.
 - Progress schema v2 stores lesson/step position and each activity's code, response, hint count, and completion. V1 lesson completion/code is migrated to the matching v2 activity IDs.
 - The curriculum now uses `Stage`/`Curriculum.stages` rather than the redundant pre-specification module taxonomy. The aligned original first lesson retains its lesson, step, and activity IDs so existing local progress for that item can still restore.
-- Stages 0–2 use generic activity primitives. Stage 1 added reusable expression-reduction content, distinct-line output validation, and expected-runtime-error assessment. Stage 2 added learner-filled trace tables checked against real worker snapshots, AST-backed value naming/reassignment requirements, and behavior tests for transformed and repeated inputs. Planned capability work is staged: decision/path tracing and additional AST requirements before Stage 3; project requirements and acceptance-test authoring before Stage 10; and a minimal multi-file editor plus durable virtual files before Stage 11.
+- Stages 0–3 use generic activity primitives. Stage 1 added reusable expression-reduction content, distinct-line output validation, and expected-runtime-error assessment. Stage 2 added learner-filled trace tables checked against real worker snapshots, AST-backed value naming/reassignment requirements, and behavior tests for transformed and repeated inputs. Stage 3 added real-worker branch-path prediction with executed/skipped line evidence and structured Python-AST/token requirements for conditions. A new repeated-occurrence trace-table test confirms the existing table can express changing loop state. Before Stage 4, extend AST requirements for loop constructs; add a new generic activity only if that chapter's pilot exposes a real gap. Project requirements and acceptance-case authoring remain gated before Stage 10; scoped multi-file editing and durable virtual files before Stage 11.
 
 ## Evidence log
 
@@ -60,15 +60,17 @@
 - Stage 0 baseline verification: 32 unit tests passed; Playwright passed 6 tests with 9 intentional browser-specific skips; lint and TypeScript/build passed. Desktop, iPad landscape, and iPad portrait screenshots were captured and inspected.
 - Stage 1 verification: all 37 unit tests passed; Playwright passed 6 tests with 9 intentional browser-specific skips, including the full Stage 0→1 Python journey and Stage 1 expression screenshots in desktop and both iPad orientations; lint and TypeScript/production build passed. Screenshots were inspected.
 - Stage 2 verification: all 42 unit tests pass; Playwright passes 6 tests with 9 intentional browser-specific skips, including the full Stage 0→2 learner journey, incorrect-and-corrected AST and trace-table responses, repeated inputs, and Stage 2 trace-table screenshots in desktop and both iPad orientations; lint and TypeScript/production build pass. Screenshots were inspected. Vite reports the non-blocking bundle-size advisory.
+- Stage 3 verification: all 50 unit tests pass; lint, TypeScript and production build pass; full Playwright suite passes 9 tests with 12 intentional browser/project skips. Chromium completes all ten Decisions lessons, including wrong-path retry, true/false prediction, input-driven boundary behavior, four-row `or` truth table, and a multi-input recommendation challenge. A separate end-to-end journey proves Stage 2 unlocks Stage 3. WebKit iPad landscape and portrait branch-trace tests pass and screenshots for desktop, landscape, and portrait were inspected. Vite reports the existing non-blocking bundle-size advisory.
 
 ## Next stage and capability gates
 
-Stages 1 and 2 are fully authored in their own curriculum files. Continue with all ten Stage 3 lessons. Before publishing decision-path content, add generic Python AST requirements for conditions and branches and a trace presentation that distinguishes executed from skipped lines; do not create decision-specific page components.
+Stages 1–3 are fully authored in their own curriculum files. Continue with all ten Stage 4 lessons. The loop chapter can initially compose existing `trace`, repeated-occurrence `trace-table`, behavior, and timeout capabilities. Add the minimal AST requirements for `for`, `range`, and `while` before authoring concept-checked code tasks; do not create loop-specific page components unless evidence shows the existing activities cannot express the intended mental model.
 
 Before the stage that needs them, implement and test reusable capabilities rather than lesson-specific components:
 
 - Before Stage 2: a learner-filled trace-table activity checked against real worker trace frames, including multiple variables/checkpoints.
 - Before Stage 3: structured Python-AST requirements and a branch/path trace presentation for executed versus skipped lines.
+- Before Stage 4: AST-backed loop-construct checks and a verified mapping of repeated `trace-table` line occurrences to iteration order/state.
 - Before Stages 9–10: evidence-oriented debugging interactions and a reusable project brief/acceptance-case flow; open explanations must remain learner-owned, not auto-graded as semantic truth.
 - Before Stage 11: scoped multi-file editing and persistent virtual files, with explicit run/reset/recovery boundaries. Prove Pyodide filesystem persistence before authoring the disk lesson.
 

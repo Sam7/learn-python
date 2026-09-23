@@ -55,6 +55,67 @@ describe('activity rendering', () => {
     expect(onRun).not.toHaveBeenCalled()
   })
 
+  it('renders conditional paths and labels lines that ran or were skipped', () => {
+    const activity: LearningActivity = {
+      id: 'trace-weather-branch',
+      kind: 'branch-trace',
+      title: 'Predict the path',
+      prompt: 'Which message will Python show?',
+      required: true,
+      code: 'temperature = 35\nif temperature > 30:\n    print("Hot")\nelse:\n    print("Cool")',
+      paths: [
+        { id: 'hot', label: 'Hot path', lines: [3] },
+        { id: 'cool', label: 'Cool path', lines: [5] },
+      ],
+    }
+
+    render(
+      <ActivityRenderer
+        activity={activity}
+        response="hot"
+        onResponseChange={vi.fn()}
+        onAssessResponse={vi.fn()}
+        code=""
+        onCodeChange={vi.fn()}
+        onResetCode={vi.fn()}
+        onRun={vi.fn()}
+        isRunning={false}
+        runtimeReady
+        execution={{
+          status: 'success',
+          stdout: 'Hot\n',
+          stderr: '',
+          inputTranscript: [],
+          traceFrames: [
+            { line: 1, event: 'line', locals: {} },
+            { line: 2, event: 'line', locals: { temperature: 35 } },
+            { line: 3, event: 'line', locals: { temperature: 35 } },
+          ],
+          durationMs: 2,
+        }}
+        feedback={null}
+        hintsRevealed={0}
+        onRevealHint={vi.fn()}
+        onCompleteTrace={vi.fn()}
+        input={{
+          interactive: true,
+          transcriptValue: '',
+          onTranscriptChange: vi.fn(),
+          pendingRequest: null,
+          answerValue: '',
+          onAnswerChange: vi.fn(),
+          onSubmitAnswer: vi.fn(),
+          onCancelRun: vi.fn(),
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('radio', { name: 'Hot path' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Run and compare' })).toBeEnabled()
+    expect(screen.getByLabelText('Line 3 executed')).toBeInTheDocument()
+    expect(screen.getByLabelText('Line 5 skipped')).toBeInTheDocument()
+  })
+
   it('saves an ungraded reflection without asking for a correctness check', () => {
     const activity: LearningActivity = {
       id: 'explain-what-changed',

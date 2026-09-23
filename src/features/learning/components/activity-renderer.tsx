@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import type {
   ArrangeCodeActivity,
+  BranchTraceActivity,
   ChoiceActivity,
   LearningActivity,
   LearnerResponse,
@@ -14,6 +15,7 @@ import type {
   ValidationResult,
 } from '../../../curriculum/types'
 import type { PythonRunResult } from '../../python/python-runner/types'
+import { getBranchLineStatuses, type BranchLineStatus } from '../domain/branch-trace'
 import { CodeActivityView, type InputInteractionProps } from './code-activity'
 import { ActivityHints } from './activity-hints'
 import { CompactCode } from './compact-code'
@@ -56,6 +58,8 @@ export function ActivityRenderer(props: ActivityRendererProps) {
       return <TraceView {...shared} activity={activity} />
     case 'trace-table':
       return <TraceTableView {...shared} activity={activity} />
+    case 'branch-trace':
+      return <BranchTraceView {...shared} activity={activity} />
     case 'reflection':
       return <ReflectionView {...shared} activity={activity} />
   }
@@ -329,13 +333,59 @@ function ReflectionView({ activity, response, onResponseChange }: SharedActivity
   )
 }
 
-function TraceCode({ code, activeLine }: { code: string; activeLine?: number }) {
+function TraceCode({ code, activeLine, lineStatuses }: { code: string; activeLine?: number; lineStatuses?: Map<number, BranchLineStatus> }) {
   return (
     <pre className="max-h-72 overflow-auto rounded-lg border border-line bg-[#f4f8f6] p-3 font-mono text-sm leading-6 text-ink"><code>
       {code.split('\n').map((line, index) => (
-        <span key={`${index}-${line}`} className={`block whitespace-pre ${activeLine === index + 1 ? 'rounded bg-teal/10 text-teal-dark' : ''}`}><span className="mr-3 inline-block w-5 select-none text-right text-muted/70">{index + 1}</span>{line || ' '}</span>
+        <span key={`${index}-${line}`} className={`flex min-w-max items-center whitespace-pre ${activeLine === index + 1 ? 'rounded bg-teal/10 text-teal-dark' : lineStatuses?.get(index + 1) === 'executed' ? 'rounded bg-teal/10 text-teal-dark' : lineStatuses?.get(index + 1) === 'skipped' ? 'rounded bg-amber-100 text-muted' : ''}`}>
+          <span className="mr-3 inline-block w-5 shrink-0 select-none text-right text-muted/70">{index + 1}</span>
+          <span className="whitespace-pre">{line || ' '}</span>
+          {lineStatuses?.has(index + 1) ? <span className="ml-5 rounded px-1.5 text-[10px] font-sans font-semibold uppercase tracking-wide" aria-label={`Line ${index + 1} ${lineStatuses.get(index + 1)}`}>{lineStatuses.get(index + 1) === 'executed' ? 'Ran' : 'Skipped'}</span> : null}
+        </span>
       ))}
     </code></pre>
+  )
+}
+
+function BranchTraceView({ activity, response, onResponseChange, onRun, isRunning, runtimeReady, execution, feedback, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: BranchTraceActivity }) {
+  const lineStatuses = getBranchLineStatuses(activity.paths, execution)
+
+  return (
+    <section className="rounded-xl border border-line bg-white p-3.5 sm:p-4" aria-label={activity.title}>
+      <div className="mb-3">
+        <h2 className="text-base font-bold text-ink">{activity.title}</h2>
+        <p className="mt-1 text-sm leading-5 text-muted">{activity.prompt}</p>
+      </div>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.9fr)]">
+        <div className="min-w-0 space-y-3">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-muted">Program · compare the marked lines after running</p>
+            <TraceCode code={activity.code} lineStatuses={lineStatuses} />
+          </div>
+          <fieldset className="space-y-1.5">
+            <legend className="mb-2 text-sm font-semibold text-ink">Which path do you predict?</legend>
+            {activity.paths.map((path) => (
+              <label key={path.id} className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border border-line px-3 text-sm text-ink hover:bg-mist/50">
+                <input
+                  type="radio"
+                  name={`branch-${activity.id}`}
+                  value={path.id}
+                  checked={response === path.id}
+                  onChange={() => onResponseChange(path.id)}
+                  className="accent-teal"
+                />
+                <span>{path.label}</span>
+              </label>
+            ))}
+          </fieldset>
+          <Button type="button" size="sm" className="min-h-10" disabled={isRunning || !runtimeReady || typeof response !== 'string'} onClick={onRun}>
+            {isRunning ? 'Tracing…' : 'Run and compare'}
+          </Button>
+        </div>
+        <ExecutionOutput execution={execution} isRunning={isRunning} feedback={feedback} />
+      </div>
+      <ActivityHints hints={activity.hints ?? []} visibleCount={hintsRevealed} onReveal={onRevealHint} />
+    </section>
   )
 }
 

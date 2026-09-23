@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 3,
-    title: 'Decisions',
-    description: 'Use true-or-false questions to choose what a program does.',
-    lessons: [
-      'Questions the computer can answer',
-      'Boolean values',
-      'One-way decision',
-      'Two possible paths',
-      'Boundaries matter',
-      'More than two paths',
-      'Combining conditions',
-      'Either condition can be enough',
-      'Negation',
-      'Decision challenge',
-    ],
-  },
-  {
     order: 4,
     title: 'Repetition and Time',
     description: 'Repeat instructions and watch values change over time.',

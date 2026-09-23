@@ -32,12 +32,25 @@ export interface BehaviorTestCase {
   }>
 }
 
-export type AstRequirement = 'text-variable' | 'variable-in-sentence' | 'named-value' | 'variable-reassignment' | 'variable-increment'
+export type AstRequirement =
+  | 'text-variable'
+  | 'variable-in-sentence'
+  | 'named-value'
+  | 'variable-reassignment'
+  | 'variable-increment'
+  | 'comparison'
+  | 'boolean-value'
+  | 'conditional'
+  | 'if-else'
+  | 'elif'
+  | 'logical-and'
+  | 'logical-or'
+  | 'logical-not'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
-  | { kind: 'behavior'; cases: BehaviorTestCase[] }
+  | { kind: 'behavior'; cases: BehaviorTestCase[]; requirements?: AstRequirement[] }
   | { kind: 'runtime-error'; exceptionName: string }
   | { kind: 'ast'; requirement: AstRequirement; rejectOutput?: string[] }
 
@@ -102,6 +115,21 @@ export interface TraceTableActivity extends ActivityBase {
   sampleInputs?: string[]
 }
 
+export interface BranchTracePath {
+  id: string
+  label: string
+  /** Exclusive body lines for this path. An otherwise path may have no lines. */
+  lines: number[]
+  otherwise?: boolean
+}
+
+/** Predict which mutually exclusive path Python takes, then compare with a real trace. */
+export interface BranchTraceActivity extends ActivityBase {
+  kind: 'branch-trace'
+  code: string
+  paths: BranchTracePath[]
+}
+
 /** A private, ungraded pause for the learner to put their reasoning into words. */
 export interface ReflectionActivity extends ActivityBase {
   kind: 'reflection'
@@ -117,6 +145,7 @@ export type LearningActivity =
   | ArrangeCodeActivity
   | TraceActivity
   | TraceTableActivity
+  | BranchTraceActivity
   | ReflectionActivity
 
 export interface LessonStep {

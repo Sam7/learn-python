@@ -173,6 +173,7 @@ export function useLearningSession() {
     const source = currentActivity.kind === 'code' ? code : currentActivity.code
     const shouldTrace = currentActivity.kind === 'trace'
       || currentActivity.kind === 'trace-table'
+      || currentActivity.kind === 'branch-trace'
       || currentActivity.kind === 'predict-state'
       || (currentActivity.kind === 'code' && currentActivity.executionMode === 'trace')
     const inputs = transcriptValue.length ? transcriptValue.split('\n') : []
@@ -211,7 +212,7 @@ export function useLearningSession() {
   }
 
   const assessResponse = async (response: LearnerResponse) => {
-    if (!activity || activity.kind === 'code' || activity.kind === 'predict-output' || activity.kind === 'predict-state' || activity.kind === 'trace' || activity.kind === 'trace-table' || activity.kind === 'reflection') return
+    if (!activity || activity.kind === 'code' || activity.kind === 'predict-output' || activity.kind === 'predict-state' || activity.kind === 'trace' || activity.kind === 'trace-table' || activity.kind === 'branch-trace' || activity.kind === 'reflection') return
     const currentActivity = activity
     handleResponseChange(response)
     const result = await assessActivity(currentActivity, {

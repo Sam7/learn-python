@@ -3,10 +3,11 @@ import { futureStages } from './stages/future-stages'
 import { stageZero } from './stages/stage-0'
 import { stageOne } from './stages/stage-1'
 import { stageTwo } from './stages/stage-2'
+import { stageThree } from './stages/stage-3'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, stageOne, stageTwo, ...futureStages],
+  stages: [stageZero, stageOne, stageTwo, stageThree, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {
@@ -154,6 +155,34 @@ export function validateCurriculum(curriculumData: Curriculum): string[] {
           }
           if (activity.checkpoints.some((checkpoint) => !Number.isInteger(checkpoint.line) || checkpoint.line < 1)) {
             issues.push(`Trace table ${activity.id} checkpoints need positive integer line numbers.`)
+          }
+        }
+        if (activity.kind === 'branch-trace') {
+          if (activity.paths.length < 2) {
+            issues.push(`Branch trace ${activity.id} needs at least two alternative paths.`)
+          }
+          const pathIds = activity.paths.map((path) => path.id)
+          if (activity.paths.some((path) => !path.id.trim() || !path.label.trim())) {
+            issues.push(`Branch trace ${activity.id} needs a name and label for every path.`)
+          }
+          if (new Set(pathIds).size !== pathIds.length) {
+            issues.push(`Branch trace ${activity.id} cannot repeat a path id.`)
+          }
+          if (activity.paths.filter((path) => path.otherwise).length > 1) {
+            issues.push(`Branch trace ${activity.id} can have at most one otherwise path.`)
+          }
+          const branchLines = activity.paths.flatMap((path) => path.lines)
+          if (new Set(branchLines).size !== branchLines.length) {
+            issues.push(`Branch trace ${activity.id} cannot assign a line to multiple paths.`)
+          }
+          if (activity.paths.some((path) => path.lines.length === 0 && !path.otherwise)) {
+            issues.push(`An empty path in branch trace ${activity.id} must be marked otherwise.`)
+          }
+          if (activity.paths.some((path) => path.otherwise && path.lines.length > 0)) {
+            issues.push(`The otherwise path in branch trace ${activity.id} must not list exclusive lines.`)
+          }
+          if (branchLines.some((line) => !Number.isInteger(line) || line < 1 || line > activity.code.split('\n').length)) {
+            issues.push(`Branch trace ${activity.id} lines must point to code lines.`)
           }
         }
         if (activity.kind === 'arrange-code') {

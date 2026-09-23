@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first three stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first four stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -74,17 +74,29 @@ describe('the canonical curriculum outline', () => {
       'Input is text',
       'Converting representations',
       'Build: the future machine',
+      'Questions the computer can answer',
+      'Boolean values',
+      'One-way decision',
+      'Two possible paths',
+      'Boundaries matter',
+      'More than two paths',
+      'Combining conditions',
+      'Either condition can be enough',
+      'Negation',
+      'Decision challenge',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(85)
-    expect(readyLessons).toHaveLength(24)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(75)
+    expect(readyLessons).toHaveLength(34)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
     expect(getNextLesson('first-tiny-creation')?.title).toBe('Values')
     expect(getNextCurriculumLesson('stage-1-lesson-8')?.title).toBe('Giving a value a name')
     expect(getNextLesson('stage-1-lesson-8')?.title).toBe('Giving a value a name')
-    expect(getNextCurriculumLesson('stage-2-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-2-lesson-10')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
+    expect(getNextLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
+    expect(getNextCurriculumLesson('stage-3-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-3-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -116,6 +128,20 @@ describe('the canonical curriculum outline', () => {
       totalCount: 6,
       isComplete: false,
     })
+  })
+
+  it('checks that branch-trace data defines distinct, valid paths', () => {
+    const broken = structuredClone(curriculum)
+    const activity = broken.stages.find((stage) => stage.id === 'stage-3')!
+      .lessons[2].steps[0].activity!
+    if (activity.kind !== 'branch-trace') throw new Error('Expected a branch-trace activity')
+    activity.paths[0].lines = [3]
+    activity.paths[1].lines = [3]
+    activity.paths[1].otherwise = true
+
+    const issues = validateCurriculum(broken)
+    expect(issues).toContain(`Branch trace ${activity.id} cannot assign a line to multiple paths.`)
+    expect(issues).toContain(`The otherwise path in branch trace ${activity.id} must not list exclusive lines.`)
   })
 
   it('requires every task in a multi-activity lesson before moving to its next lesson', () => {
@@ -443,6 +469,36 @@ describe('Stage 2 activity assessment', () => {
     expect(incorrect.message).toContain('after line 1, coins is 5')
   })
 
+  it('uses repeated occurrences of one source line as successive loop-state checkpoints', async () => {
+    const activity: LearningActivity = {
+      id: 'trace-loop-total',
+      kind: 'trace-table',
+      title: 'Follow the total',
+      prompt: 'Record the total after each repetition.',
+      required: true,
+      code: 'total = 0\nfor step in [2, 3]:\n    total = total + step\n    print(total)',
+      variables: ['total'],
+      checkpoints: [
+        { id: 'first', line: 3, occurrence: 1, label: 'after repetition 1' },
+        { id: 'second', line: 3, occurrence: 2, label: 'after repetition 2' },
+      ],
+    }
+    const execution = success('2\n5\n', [], [
+      { line: 1, event: 'line', locals: {} },
+      { line: 2, event: 'line', locals: { total: 0 } },
+      { line: 3, event: 'line', locals: { total: 0, step: 2 } },
+      { line: 4, event: 'line', locals: { total: 2, step: 2 } },
+      { line: 3, event: 'line', locals: { total: 2, step: 3 } },
+      { line: 4, event: 'line', locals: { total: 5, step: 3 } },
+    ])
+
+    expect(await assessActivity(activity, {
+      response: { 'first:total': '2', 'second:total': '5' },
+      execution,
+      runPython: noRun,
+    })).toMatchObject({ passed: true })
+  })
+
   it('runs the AST check only after the required output has passed', async () => {
     const activity = getLessonById('stage-2-lesson-1')!.steps[1].activity!
     expect(activity.kind).toBe('code')
@@ -466,5 +522,65 @@ describe('Stage 2 activity assessment', () => {
     })
     expect(wrongOutput.passed).toBe(false)
     expect(astRunCount).toBe(1)
+  })
+})
+
+describe('Stage 3 decision assessment capabilities', () => {
+  it('checks a path prediction against actual Python line events', async () => {
+    const activity: LearningActivity = {
+      id: 'predict-temperature-path',
+      kind: 'branch-trace',
+      title: 'Predict the path',
+      prompt: 'Choose the branch.',
+      required: true,
+      code: 'temperature = 35\nif temperature > 30:\n    print("Hot")\nelse:\n    print("Cool")',
+      paths: [
+        { id: 'hot', label: 'Hot', lines: [3] },
+        { id: 'cool', label: 'Cool', lines: [5] },
+      ],
+    }
+    const execution = success('Hot\n', [], [
+      { line: 1, event: 'line', locals: {} },
+      { line: 2, event: 'line', locals: { temperature: 35 } },
+      { line: 3, event: 'line', locals: { temperature: 35 } },
+    ])
+
+    expect(await assessActivity(activity, { response: 'hot', execution, runPython: noRun }))
+      .toMatchObject({ passed: true, message: 'Correct — Python took the “Hot” path.' })
+    expect(await assessActivity(activity, { response: 'cool', execution, runPython: noRun }))
+      .toMatchObject({ passed: false, evidence: { expected: 'Hot', actual: 'Cool' } })
+  })
+
+  it('requires structured AST concepts in addition to passing varied behaviour cases', async () => {
+    const activity: CodeActivity = {
+      id: 'build-a-decision',
+      kind: 'code',
+      title: 'Build a decision',
+      prompt: 'Use an if statement.',
+      required: true,
+      starterCode: 'if ready:\n    print("Go")',
+      assessment: {
+        kind: 'behavior',
+        cases: [{ inputs: [], output: { mode: 'exact', lines: ['Go'] } }],
+        requirements: ['conditional', 'comparison'],
+      },
+    }
+    const runner = async ({ code }: { code: string }) => code.includes('isinstance(node, ast.Compare)')
+      ? { ...success(''), status: 'error' as const, error: 'AssertionError: Use a comparison.' }
+      : success('Go\n')
+
+    const failed = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('Go\n'),
+      runPython: runner,
+    })
+    expect(failed).toMatchObject({ passed: false, message: 'Use a comparison such as >, <, ==, or >=.' })
+
+    const passed = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('Go\n'),
+      runPython: async ({ code }) => code.includes('import ast') ? success('') : success('Go\n'),
+    })
+    expect(passed).toMatchObject({ passed: true })
   })
 })

@@ -1,6 +1,7 @@
 import type {
   ArrangeCodeActivity,
   AstRequirement,
+  BranchTraceActivity,
   CodeActivity,
   LearningActivity,
   LearnerResponse,
@@ -10,6 +11,7 @@ import type {
   ValidationResult,
 } from '../../../curriculum/types'
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
+import { resolveBranchPath } from '../../learning/domain/branch-trace'
 
 export interface ActivityAssessmentContext {
   response?: LearnerResponse
@@ -89,7 +91,56 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
 
 function pythonAstCheck(source: string, requirement: AstRequirement): string {
   const literal = JSON.stringify(source)
-  const conceptCheck = requirement === 'variable-in-sentence' ? `
+const conceptCheck = requirement === 'comparison' ? `
+if not any(isinstance(node, ast.Compare) for node in ast.walk(tree)):
+    raise AssertionError("Use a comparison such as >, <, ==, or >=.")
+` : requirement === 'boolean-value' ? `
+boolean_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign)
+    and isinstance(node.value, ast.Constant)
+    and type(node.value.value) is bool
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+printed_names = {
+    child.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    for argument in node.args
+    for child in ast.walk(argument)
+    if isinstance(child, ast.Name)
+}
+if not boolean_names.intersection(printed_names):
+    raise AssertionError("Save True or False in a name, then print that name.")
+` : requirement === 'conditional' ? `
+if not any(isinstance(node, ast.If) for node in ast.walk(tree)):
+    raise AssertionError("Use an if statement to make a decision.")
+` : requirement === 'if-else' ? `
+if not any(isinstance(node, ast.If) and bool(node.orelse) for node in ast.walk(tree)):
+    raise AssertionError("Add an else path so both outcomes have an instruction.")
+` : requirement === 'elif' ? `
+import io
+import tokenize
+has_elif = any(
+    token.type == tokenize.NAME and token.string == "elif"
+    for token in tokenize.generate_tokens(io.StringIO(source).readline)
+)
+if not has_elif:
+    raise AssertionError("Use elif to add another path between if and else.")
+` : requirement === 'logical-and' ? `
+if not any(isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And) for node in ast.walk(tree)):
+    raise AssertionError("Use and to require both conditions to be true.")
+` : requirement === 'logical-or' ? `
+if not any(isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or) for node in ast.walk(tree)):
+    raise AssertionError("Use or when either condition can be enough.")
+` : requirement === 'logical-not' ? `
+if not any(isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not) for node in ast.walk(tree)):
+    raise AssertionError("Use not to check the opposite of a True or False value.")
+` : requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
     for node in ast.walk(tree)
@@ -215,6 +266,14 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'named-value': 'Great work — you gave a value a name and used it.',
       'variable-reassignment': 'Great work — the same named value changes as the program runs.',
       'variable-increment': 'Great work — you added 1 to the value the name already held.',
+      comparison: 'Great work — your program asks Python to compare values.',
+      'boolean-value': 'Great work — you used a True or False value.',
+      conditional: 'Great work — your program uses an if statement.',
+      'if-else': 'Great work — your program handles both paths with if and else.',
+      elif: 'Great work — your program uses elif for an extra path.',
+      'logical-and': 'Great work — your program combines conditions with and.',
+      'logical-or': 'Great work — your program combines conditions with or.',
+      'logical-not': 'Great work — your program checks the opposite with not.',
     }
     return messages[requirement]
   }
@@ -225,6 +284,14 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'named-value': 'Give a value a name, then use that name in print().',
     'variable-reassignment': 'Assign a new value to the same name, then print the name.',
     'variable-increment': 'Use the current value on the right side: score = score + 1.',
+    comparison: 'Use a comparison such as >, <, ==, or >=.',
+    'boolean-value': 'Use the Python value True or False.',
+    conditional: 'Use an if statement to make a decision.',
+    'if-else': 'Add an else path so both outcomes have an instruction.',
+    elif: 'Use elif to add another path between if and else.',
+    'logical-and': 'Use and to require both conditions to be true.',
+    'logical-or': 'Use or when either condition can be enough.',
+    'logical-not': 'Use not to check the opposite of a True or False value.',
   }
   return messages[requirement]
 }
@@ -315,6 +382,13 @@ async function validateCodeActivity(
     }
   }
 
+  for (const requirement of assessment.requirements ?? []) {
+    const result = await context.runPython({ code: pythonAstCheck(source, requirement) })
+    if (result.status !== 'success') {
+      return { passed: false, message: astAssessmentMessage(requirement, false) }
+    }
+  }
+
   return { passed: true, message: 'Great work — your program works with different answers.' }
 }
 
@@ -374,6 +448,28 @@ function validateTraceTable(activity: TraceTableActivity, context: ActivityAsses
     }
   }
   return { passed: true, message: 'Your table matches the values Python had at every checkpoint.' }
+}
+
+function validateBranchTrace(activity: BranchTraceActivity, context: ActivityAssessmentContext): ValidationResult {
+  if (context.execution.status !== 'success') return failedExecution(context.execution)
+  const prediction = responseText(context.response)
+  if (!prediction) return { passed: false, message: 'Choose the path you think Python will take, then run it.' }
+
+  const resolution = resolveBranchPath(activity.paths, context.execution)
+  if (resolution.kind === 'unresolved') {
+    return { passed: false, message: 'Python’s trace did not match one clear path. This example needs a content review.' }
+  }
+  if (prediction !== resolution.path.id) {
+    return {
+      passed: false,
+      message: `Python took the “${resolution.path.label}” path. Compare the lines that ran and try again.`,
+      evidence: {
+        expected: resolution.path.label,
+        actual: activity.paths.find((path) => path.id === prediction)?.label ?? 'No path selected',
+      },
+    }
+  }
+  return { passed: true, message: `Correct — Python took the “${resolution.path.label}” path.` }
 }
 
 function validateArrangeCode(activity: ArrangeCodeActivity, response: LearnerResponse | undefined): ValidationResult {
@@ -440,6 +536,8 @@ export async function assessActivity(
         : { passed: false, message: 'Python did not record any steps for this program.' }
     case 'trace-table':
       return validateTraceTable(activity, context)
+    case 'branch-trace':
+      return validateBranchTrace(activity, context)
     case 'reflection':
       return { passed: false, message: 'This reflection is for your own thinking and is not graded.' }
   }
