@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 4,
-    title: 'Repetition and Time',
-    description: 'Repeat instructions and watch values change over time.',
-    lessons: [
-      'Discover the repetition problem',
-      'Repeat something a fixed number of times',
-      'The loop variable changes',
-      'Use the changing value',
-      'State can survive between iterations',
-      'Decisions inside repetition',
-      'Repeat while something remains true',
-      'The infinite loop',
-      'Repeat until the user succeeds',
-      'Build: launch sequence',
-    ],
-  },
-  {
     order: 5,
     title: 'Collections',
     description: 'Keep related values together and work with them as a group.',

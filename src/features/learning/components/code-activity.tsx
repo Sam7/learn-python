@@ -84,6 +84,7 @@ export function CodeActivityView({
           isRunning={isRunning}
           feedback={feedback}
           expectedRuntimeError={activity.assessment.kind === 'runtime-error' ? activity.assessment.exceptionName : undefined}
+          expectedTimeout={activity.assessment.kind === 'timeout'}
         />
       </div>
 

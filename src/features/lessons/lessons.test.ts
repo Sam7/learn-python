@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first four stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first five stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -84,9 +84,19 @@ describe('the canonical curriculum outline', () => {
       'Either condition can be enough',
       'Negation',
       'Decision challenge',
+      'Discover the repetition problem',
+      'Repeat something a fixed number of times',
+      'The loop variable changes',
+      'Use the changing value',
+      'State can survive between iterations',
+      'Decisions inside repetition',
+      'Repeat while something remains true',
+      'The infinite loop',
+      'Repeat until the user succeeds',
+      'Build: launch sequence',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(75)
-    expect(readyLessons).toHaveLength(34)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(65)
+    expect(readyLessons).toHaveLength(44)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -95,8 +105,9 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-1-lesson-8')?.title).toBe('Giving a value a name')
     expect(getNextCurriculumLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
     expect(getNextLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
-    expect(getNextCurriculumLesson('stage-3-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-3-lesson-10')).toBeUndefined()
+    expect(getNextLesson('stage-3-lesson-10')?.title).toBe('Discover the repetition problem')
+    expect(getNextCurriculumLesson('stage-4-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-4-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -582,5 +593,31 @@ describe('Stage 3 decision assessment capabilities', () => {
       runPython: async ({ code }) => code.includes('import ast') ? success('') : success('Go\n'),
     })
     expect(passed).toMatchObject({ passed: true })
+  })
+})
+
+describe('Stage 4 repetition safety', () => {
+  it('passes an intentional timeout and explains when a loop actually finishes', async () => {
+    const activity: CodeActivity = {
+      id: 'observe-a-loop-timeout',
+      kind: 'code',
+      title: 'Observe the time limit',
+      prompt: 'Run the loop and notice that Python stops it safely.',
+      required: true,
+      starterCode: 'while True:\n    print("again")',
+      assessment: { kind: 'timeout' },
+    }
+
+    expect(await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: { ...success(''), status: 'timeout' },
+      runPython: noRun,
+    })).toMatchObject({ passed: true, message: 'Good observation — Python stopped this run at the time limit.' })
+
+    expect(await assessActivity(activity, {
+      code: 'print("finished")',
+      execution: success('finished\n'),
+      runPython: noRun,
+    })).toMatchObject({ passed: false, message: 'This program finished before the time limit. Make the loop condition stay True.' })
   })
 })

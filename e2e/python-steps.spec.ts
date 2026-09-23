@@ -46,6 +46,17 @@ async function runStarterWithAnswers(page: Page, answers: string[]) {
   await expect(page.getByRole('status')).toContainText('Great work', { timeout: 30_000 })
 }
 
+async function finishTrace(page: Page) {
+  await page.getByRole('button', { name: 'Run and trace' }).click()
+  await expect(page.getByRole('button', { name: 'Next execution step' })).toBeVisible({ timeout: 20_000 })
+  for (let step = 0; step < 100; step += 1) {
+    if (await page.getByRole('button', { name: 'Finish trace' }).isVisible().catch(() => false)) break
+    await page.getByRole('button', { name: 'Next execution step' }).click()
+  }
+  await page.getByRole('button', { name: 'Finish trace' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeEnabled()
+}
+
 async function answerLivePrompt(page: Page, value: string, answerNumber: number) {
   const answer = page.getByRole('textbox', { name: `Answer ${answerNumber}` })
   await expect(answer).toBeVisible()
@@ -113,7 +124,9 @@ async function openStageTwoTraceTableLesson(page: Page) {
 }
 
 async function openLesson(page: Page, lessonId: string, stepId: string) {
-  await page.evaluate(({ completedActivityIds, currentLessonId, currentStepId }) => {
+  await page.addInitScript(({ completedActivityIds, currentLessonId, currentStepId, seedId }) => {
+    if (sessionStorage.getItem(seedId)) return
+    sessionStorage.setItem(seedId, 'true')
     localStorage.setItem('python-steps:progress', JSON.stringify({
       version: 2,
       currentLessonId,
@@ -125,18 +138,23 @@ async function openLesson(page: Page, lessonId: string, stepId: string) {
     completedActivityIds: activitiesBefore(lessonId),
     currentLessonId: lessonId,
     currentStepId: stepId,
+    seedId: `python-steps:e2e-seed:${Date.now()}-${Math.random()}`,
   })
-  await page.reload()
+  await page.goto('/')
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/')
-  await page.evaluate(() => localStorage.clear())
-  await page.reload()
+  await page.addInitScript(() => {
+    const initialized = 'python-steps:e2e-storage-cleared'
+    if (sessionStorage.getItem(initialized)) return
+    localStorage.clear()
+    sessionStorage.setItem(initialized, 'true')
+  })
 })
 
 test('Stage 0: prediction, output, and saved progress work across a refresh', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'The full Python journey runs in Chromium; WebKit is reserved for tablet layout and focus checks.')
+  await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Make something happen' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('print')
   await expect(page.getByText('Nothing leaves this browser · progress saved on this device.')).toBeVisible()
@@ -175,6 +193,7 @@ test('Stage 0: prediction, output, and saved progress work across a refresh', as
 test('Stages 0–2: the first three curriculum stages complete and unlock Decisions', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Curriculum content execution is covered in Chromium.')
   test.setTimeout(240_000)
+  await page.goto('/')
   const output = page.getByRole('region', { name: 'Python output' })
   await runAndExpectPass(page, 'print("Mine!")')
   await page.getByRole('button', { name: 'Next lesson' }).click()
@@ -463,15 +482,100 @@ test('Stage 3: comparisons and decision paths work through the full chapter', as
 
   await runStarterWithAnswers(page, ['32', 'no'])
   await expect(page.getByRole('button', { name: /Decisions Stage complete/ })).toContainText('10/10 ready')
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Discover the repetition problem' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Discover the repetition problem' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('print')
+})
+
+test('Stage 4: repetition and changing loop state work through the full chapter', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(240_000)
+  await openLesson(page, 'stage-4-lesson-1', 'add-one-more-jump')
+  await expect(page.getByRole('heading', { name: 'Discover the repetition problem' })).toBeVisible()
+
+  await runAndExpectPass(page, 'print("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runStarterWithAnswers(page, [])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  const prediction = page.getByRole('textbox', { name: 'Your output prediction' })
+  await prediction.fill('0\n1\n2\n3\n4')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 0')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'It starts at 0 and stops before 5.' }).click()
+  await expect(page.getByRole('status')).toContainText('five values starting at 0')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await prediction.fill('0\n2\n4\n6\n8')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 0')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'for number in range(5):\n    print(number * 3)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await finishTrace(page)
+  await page.getByRole('button', { name: 'Next step' }).click()
+  const loopTable = [
+    ['total after turn 1', '2'],
+    ['total after turn 2', '4'],
+    ['total after turn 3', '6'],
+    ['total after turn 4', '8'],
+  ] as const
+  for (const [label, value] of loopTable) await page.getByRole('textbox', { name: label }).fill(value)
+  await page.getByRole('textbox', { name: 'total after turn 1' }).fill('3')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('after turn 1, total is 2')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await page.getByRole('textbox', { name: 'total after turn 1' }).fill('2')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('matches the values Python had at every checkpoint')
+  await capture(page, testInfo, 'stage-4-loop-state-desktop')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await finishTrace(page)
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await prediction.fill('3\n4\n5')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 3')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await finishTrace(page)
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'count becomes 0, so count > 0 is False.' }).click()
+  await expect(page.getByRole('status')).toContainText('repeated subtraction eventually makes the condition False')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runStarterWithAnswers(page, [])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('stopped this run at the time limit', { timeout: 20_000 })
+  await expect(page.getByText('Python stopped this program at the time limit, as expected.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'count stays 3 because the loop never changes it.' }).click()
+  await expect(page.getByRole('status')).toContainText('count needs to change')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runStarterWithAnswers(page, ['ruby', 'python'])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runStarterWithAnswers(page, ['5'])
+  await expect(page.getByRole('button', { name: /Repetition and Time Stage complete/ })).toContainText('10/10 ready')
   await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Decision challenge' })).toBeVisible()
-  await expect(page.locator('.cm-content')).toContainText('temperature >= 30 and not is_raining')
+  await expect(page.getByRole('heading', { name: 'Build: launch sequence' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('range(start, 0, -1)')
 })
 
 test('invalid Python and runaway code show useful feedback and recover', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Runtime failure cases execute in Chromium.')
   test.setTimeout(40_000)
+  await page.goto('/')
   await waitForPython(page)
   const output = page.getByRole('region', { name: 'Python output' })
 
@@ -490,9 +594,21 @@ test('invalid Python and runaway code show useful feedback and recover', async (
   await expect(output).toContainText('recovered', { timeout: 15_000 })
 })
 
+test('large Python output is bounded so a print-heavy program stays manageable', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The worker output limit is exercised in Chromium.')
+  await page.goto('/')
+  await waitForPython(page)
+  await setEditorCode(page, 'for number in range(25000):\n    print("x")')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  const output = page.getByRole('region', { name: 'Python output' }).locator('pre')
+  await expect(output).toContainText('[Python output shortened after 20000 characters.]', { timeout: 20_000 })
+  expect((await output.textContent())?.length ?? 0).toBeLessThan(21_000)
+})
+
 test('interactive Python input supports multiple answers without echoing them into output', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Python input behaviour executes in Chromium.')
   test.setTimeout(90_000)
+  await page.goto('/')
   await waitForPython(page)
   await setEditorCode(page, 'first = input("First? ")\nsecond = input("Second? ")\nprint(first)\nprint(second)')
   await page.getByRole('button', { name: 'Run code' }).click()
@@ -505,8 +621,9 @@ test('interactive Python input supports multiple answers without echoing them in
   await expect(output).not.toContainText('Second? Python')
 })
 
-test('tablet layout remains focusable, scrollable, and free from horizontal overflow', async ({ page, browserName }, testInfo) => {
+test('tablet layout remains focusable, scrollable, and free from horizontal overflow @tablet', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'webkit', 'Tablet coverage uses WebKit.')
+  await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Make something happen' })).toBeVisible()
   await expect(page.locator('.cm-content')).toBeVisible()
   await page.locator('.cm-content').click()
@@ -569,11 +686,20 @@ test('tablet layout remains focusable, scrollable, and free from horizontal over
   await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-2-trace-table`)
 })
 
-test('branch trace stays clear and usable at iPad landscape and portrait sizes', async ({ page, browserName }, testInfo) => {
+test('branch trace stays clear and usable at iPad landscape and portrait sizes @tablet', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'webkit', 'The responsive branch-trace review uses WebKit iPad projects.')
   await openLesson(page, 'stage-3-lesson-3', 'trace-the-true-path')
   await expect(page.getByRole('heading', { name: 'One-way decision' })).toBeVisible()
-  await page.getByRole('radio', { name: 'The indented message runs' }).check()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 20_000 })
+  const expectedPath = page.getByRole('radio', { name: 'The indented message runs' })
+  await expectedPath.check()
+  await expect(expectedPath).toBeChecked()
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('python-steps:progress') ?? '{}') as {
+      activityProgress?: Record<string, { response?: unknown }>
+    }
+    return saved.activityProgress?.['trace-hot-one-way-decision']?.response
+  })).toBe('message-runs')
   await expect(page.getByRole('button', { name: 'Run and compare' })).toBeEnabled({ timeout: 60_000 })
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python took the “The indented message runs” path', { timeout: 20_000 })
@@ -598,6 +724,48 @@ test('branch trace stays clear and usable at iPad landscape and portrait sizes',
   await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
   await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-3-branch-trace`)
+})
+
+test('repeated loop-state table remains usable at iPad landscape and portrait sizes @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'The responsive loop-state review uses WebKit iPad projects.')
+  await openLesson(page, 'stage-4-lesson-5', 'fill-the-total-table')
+  await expect(page.getByRole('heading', { name: 'State can survive between iterations' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 20_000 })
+
+  const answers = [
+    ['total after turn 1', '2'],
+    ['total after turn 2', '4'],
+    ['total after turn 3', '6'],
+    ['total after turn 4', '8'],
+  ] as const
+  for (const [label, value] of answers) {
+    const cell = page.getByRole('textbox', { name: label })
+    await cell.fill(value)
+    await expect(cell).toHaveValue(value)
+  }
+  await expect(page.getByRole('button', { name: 'Run and compare' })).toBeEnabled({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('matches the values Python had at every checkpoint', { timeout: 20_000 })
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-4-loop-state`)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('table', { name: 'Your state trace table' })).toBeVisible()
+  await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-4-loop-state`)
 })
 
 async function verifyViewport(page: Page) {

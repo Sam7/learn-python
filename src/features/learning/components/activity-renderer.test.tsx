@@ -116,6 +116,50 @@ describe('activity rendering', () => {
     expect(screen.getByLabelText('Line 5 skipped')).toBeInTheDocument()
   })
 
+  it('shows feedback for a deterministic choice instead of silently unlocking the next step', () => {
+    const activity: LearningActivity = {
+      id: 'choose-the-right-result',
+      kind: 'choice',
+      title: 'Choose the result',
+      prompt: 'What happens?',
+      required: true,
+      options: [{ id: 'right', text: 'The loop stops.' }],
+      correctOptionId: 'right',
+    }
+
+    render(
+      <ActivityRenderer
+        activity={activity}
+        response="right"
+        onResponseChange={vi.fn()}
+        onAssessResponse={vi.fn()}
+        code=""
+        onCodeChange={vi.fn()}
+        onResetCode={vi.fn()}
+        onRun={vi.fn()}
+        isRunning={false}
+        runtimeReady
+        execution={null}
+        feedback={{ passed: true, message: 'Correct — the loop condition becomes False.' }}
+        hintsRevealed={0}
+        onRevealHint={vi.fn()}
+        onCompleteTrace={vi.fn()}
+        input={{
+          interactive: true,
+          transcriptValue: '',
+          onTranscriptChange: vi.fn(),
+          pendingRequest: null,
+          answerValue: '',
+          onAnswerChange: vi.fn(),
+          onSubmitAnswer: vi.fn(),
+          onCancelRun: vi.fn(),
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('Correct — the loop condition becomes False.')
+  })
+
   it('saves an ungraded reflection without asking for a correctness check', () => {
     const activity: LearningActivity = {
       id: 'explain-what-changed',

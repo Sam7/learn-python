@@ -17,6 +17,7 @@ import type {
 import type { PythonRunResult } from '../../python/python-runner/types'
 import { getBranchLineStatuses, type BranchLineStatus } from '../domain/branch-trace'
 import { CodeActivityView, type InputInteractionProps } from './code-activity'
+import { ActivityFeedback } from './activity-feedback'
 import { ActivityHints } from './activity-hints'
 import { CompactCode } from './compact-code'
 import { ExecutionOutput } from './execution-output'
@@ -131,7 +132,7 @@ function PredictStateView({ activity, response, onResponseChange, onRun, isRunni
   )
 }
 
-function ChoiceView({ activity, response, onAssessResponse, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: ChoiceActivity }) {
+function ChoiceView({ activity, response, onAssessResponse, feedback, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: ChoiceActivity }) {
   return (
     <section className="rounded-xl border border-line bg-white p-3.5 sm:p-4" aria-label={activity.title}>
       <h2 className="text-base font-bold text-ink">{activity.title}</h2>
@@ -150,12 +151,13 @@ function ChoiceView({ activity, response, onAssessResponse, hintsRevealed, onRev
           </button>
         ))}
       </fieldset>
+      {feedback ? <div className="mt-3"><ActivityFeedback feedback={feedback} /></div> : null}
       <ActivityHints hints={activity.hints ?? []} visibleCount={hintsRevealed} onReveal={onRevealHint} />
     </section>
   )
 }
 
-function ArrangeCodeView({ activity, response, onAssessResponse, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: ArrangeCodeActivity }) {
+function ArrangeCodeView({ activity, response, onAssessResponse, feedback, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: ArrangeCodeActivity }) {
   const order = Array.isArray(response) ? response : activity.startingOrder
   const move = (index: number, direction: -1 | 1) => {
     const targetIndex = index + direction
@@ -184,6 +186,7 @@ function ArrangeCodeView({ activity, response, onAssessResponse, hintsRevealed, 
           )
         })}
       </ol>
+      {feedback ? <div className="mt-3"><ActivityFeedback feedback={feedback} /></div> : null}
       <ActivityHints hints={activity.hints ?? []} visibleCount={hintsRevealed} onReveal={onRevealHint} />
     </section>
   )

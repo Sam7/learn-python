@@ -22,8 +22,8 @@ export default defineConfig({
     timeout: 30_000,
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'webkit-ipad-landscape', use: { ...devices['iPad Pro 11 landscape'] } },
-    { name: 'webkit-ipad-portrait', use: { ...devices['iPad Pro 11'] } },
+    { name: 'chromium', grepInvert: /@tablet/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit-ipad-landscape', grep: /@tablet/, use: { ...devices['iPad Pro 11 landscape'] } },
+    { name: 'webkit-ipad-portrait', grep: /@tablet/, use: { ...devices['iPad Pro 11'] } },
   ],
 })

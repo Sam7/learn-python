@@ -1,4 +1,5 @@
 import { INPUT_STATUS, waitForInput } from './python-runner/input-channel'
+import { createOutputCapture } from './python-runner/output-capture'
 import type { WorkerRequest, WorkerResponse } from './python-runner/protocol'
 import type { PythonInputTranscriptEntry } from './python-runner/types'
 import type { PythonTraceFrame, PythonTraceValue } from './python-runner/types'
@@ -172,8 +173,8 @@ async function runPython(
   trace: boolean,
 ) {
   const startedAt = performance.now()
-  const stdout: string[] = []
-  const stderr: string[] = []
+  const stdout = createOutputCapture()
+  const stderr = createOutputCapture(20_000, 'Python error output')
   const traceFrames: PythonTraceFrame[] = []
   const context: RunContext = {
     requestId,
@@ -191,15 +192,15 @@ async function runPython(
       })
     }
     pyodide.setStdin({ stdin: () => nextInput(context, '') })
-    pyodide.setStdout({ batched: (text) => stdout.push(`${text}\n`) })
-    pyodide.setStderr({ batched: (text) => stderr.push(`${text}\n`) })
+    pyodide.setStdout({ batched: (text) => stdout.append(`${text}\n`) })
+    pyodide.setStderr({ batched: (text) => stderr.append(`${text}\n`) })
     await pyodide.runPythonAsync(wrappedLearnerCode(code, trace))
     self.postMessage({
       type: 'run-result',
       requestId,
       status: 'success',
-      stdout: stdout.join(''),
-      stderr: stderr.join(''),
+      stdout: stdout.read(),
+      stderr: stderr.read(),
       inputTranscript: context.inputTranscript,
       ...(trace ? { traceFrames } : {}),
       durationMs: Math.round(performance.now() - startedAt),
@@ -210,8 +211,8 @@ async function runPython(
       type: 'run-result',
       requestId,
       status: cancelled ? 'cancelled' : 'error',
-      stdout: stdout.join(''),
-      stderr: stderr.join(''),
+      stdout: stdout.read(),
+      stderr: stderr.read(),
       inputTranscript: context.inputTranscript,
       ...(trace ? { traceFrames } : {}),
       error: errorMessage(error),

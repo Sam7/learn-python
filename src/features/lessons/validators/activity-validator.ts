@@ -140,6 +140,18 @@ if not any(isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or) for node
 ` : requirement === 'logical-not' ? `
 if not any(isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not) for node in ast.walk(tree)):
     raise AssertionError("Use not to check the opposite of a True or False value.")
+` : requirement === 'for-loop' ? `
+if not any(isinstance(node, ast.For) for node in ast.walk(tree)):
+    raise AssertionError("Use a for loop to repeat the instruction.")
+` : requirement === 'range-call' ? `
+if not any(
+    isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range"
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use range() to choose how many repetitions to make.")
+` : requirement === 'while-loop' ? `
+if not any(isinstance(node, ast.While) for node in ast.walk(tree)):
+    raise AssertionError("Use while to repeat as long as a question stays True.")
 ` : requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
@@ -274,6 +286,9 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'logical-and': 'Great work — your program combines conditions with and.',
       'logical-or': 'Great work — your program combines conditions with or.',
       'logical-not': 'Great work — your program checks the opposite with not.',
+      'for-loop': 'Great work — your program repeats instructions with for.',
+      'range-call': 'Great work — range() controls the repetitions.',
+      'while-loop': 'Great work — your program repeats while its question stays True.',
     }
     return messages[requirement]
   }
@@ -292,6 +307,9 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'logical-and': 'Use and to require both conditions to be true.',
     'logical-or': 'Use or when either condition can be enough.',
     'logical-not': 'Use not to check the opposite of a True or False value.',
+    'for-loop': 'Use a for loop to repeat the instruction.',
+    'range-call': 'Use range() to choose how many repetitions to make.',
+    'while-loop': 'Use while to repeat as long as a question stays True.',
   }
   return messages[requirement]
 }
@@ -301,6 +319,15 @@ async function validateCodeActivity(
   context: ActivityAssessmentContext,
 ): Promise<ValidationResult> {
   const assessment = activity.assessment
+  if (assessment.kind === 'timeout') {
+    if (context.execution.status === 'timeout') {
+      return { passed: true, message: 'Good observation — Python stopped this run at the time limit.' }
+    }
+    if (context.execution.status === 'success') {
+      return { passed: false, message: 'This program finished before the time limit. Make the loop condition stay True.' }
+    }
+    return failedExecution(context.execution)
+  }
   if (assessment.kind === 'runtime-error') {
     const errorLines = context.execution.error?.split('\n').map((line) => line.trimStart()) ?? []
     const expectedError = errorLines.some((line) => line.startsWith(`${assessment.exceptionName}:`))

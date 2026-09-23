@@ -111,6 +111,7 @@ function App() {
         isBusy={session.isBusy}
         isLessonComplete={session.isLessonDone}
         runtimeStatus={session.runtimeStatus}
+        runtimeError={session.runtimeError}
         onPrevious={session.goPrevious}
         onNext={session.goNext}
       />

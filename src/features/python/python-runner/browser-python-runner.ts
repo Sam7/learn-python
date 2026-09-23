@@ -13,7 +13,7 @@ import type {
   PythonRunner,
 } from './types'
 
-const DEFAULT_TIMEOUT_MS = 8_000
+const DEFAULT_TIMEOUT_MS = 5_000
 const INPUT_WAIT_TIMEOUT_MS = 5 * 60 * 1_000
 
 interface PendingRun {

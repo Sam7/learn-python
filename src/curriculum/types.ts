@@ -46,11 +46,15 @@ export type AstRequirement =
   | 'logical-and'
   | 'logical-or'
   | 'logical-not'
+  | 'for-loop'
+  | 'range-call'
+  | 'while-loop'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
   | { kind: 'behavior'; cases: BehaviorTestCase[]; requirements?: AstRequirement[] }
+  | { kind: 'timeout' }
   | { kind: 'runtime-error'; exceptionName: string }
   | { kind: 'ast'; requirement: AstRequirement; rejectOutput?: string[] }
 

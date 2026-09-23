@@ -12,6 +12,7 @@ interface LessonActionBarProps {
   isBusy: boolean
   isLessonComplete: boolean
   runtimeStatus: 'loading' | 'ready' | 'error'
+  runtimeError?: string
   onPrevious: () => void
   onNext: () => void
 }
@@ -27,6 +28,7 @@ export function LessonActionBar({
   isBusy,
   isLessonComplete,
   runtimeStatus,
+  runtimeError,
   onPrevious,
   onNext,
 }: LessonActionBarProps) {
@@ -36,15 +38,20 @@ export function LessonActionBar({
   const percent = requiredActivities > 0 ? Math.round((completed / requiredActivities) * 100) : 0
 
   return (
-    <footer className="sticky bottom-0 z-30 border-t border-line bg-paper/95 shadow-[0_-8px_24px_rgba(31,42,42,0.07)] backdrop-blur-md" data-testid="sticky-action-bar" aria-label="Lesson progress and navigation">
+    <footer className="sticky bottom-0 z-30 border-t border-line bg-paper/95 shadow-[0_-8px_24px_rgba(31,42,42,0.07)] backdrop-blur-md" data-testid="sticky-action-bar" data-runtime-status={runtimeStatus} aria-label="Lesson progress and navigation">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-2.5 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-7 lg:px-10">
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-bold text-ink sm:text-sm">
-              {isLessonComplete ? 'Lesson complete' : runtimeStatus === 'loading' ? 'Preparing Python…' : isBusy ? 'Working on it…' : `Step ${stepNumber} of ${totalSteps}`}
+              {isLessonComplete ? 'Lesson complete' : runtimeStatus === 'loading' ? 'Preparing Python…' : runtimeStatus === 'error' ? 'Python could not start' : isBusy ? 'Working on it…' : `Step ${stepNumber} of ${totalSteps}`}
             </p>
             <p className="text-[11px] text-muted sm:text-xs">{completedActivities} of {requiredActivities} tasks complete</p>
           </div>
+          {runtimeStatus === 'error' ? (
+            <p role="alert" className="mt-1.5 break-words text-xs leading-5 text-red-700">
+              Refresh the page and try again.{runtimeError ? ` Details: ${runtimeError}` : ''}
+            </p>
+          ) : null}
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Required task progress" aria-valuemin={0} aria-valuemax={progressMaximum} aria-valuenow={completed}>
             <div className="h-full rounded-full bg-teal transition-[width]" style={{ width: `${percent}%` }} />
           </div>

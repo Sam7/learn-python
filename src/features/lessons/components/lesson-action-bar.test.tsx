@@ -32,4 +32,12 @@ describe('sticky lesson navigation', () => {
     render(<LessonActionBar {...commonProps} nextLabel="Course complete" isLessonComplete canGoNext={false} />)
     expect(screen.getByRole('button', { name: /Course complete/ })).toBeDisabled()
   })
+
+  it('explains when Python could not start', () => {
+    render(<LessonActionBar {...commonProps} runtimeStatus="error" runtimeError="Network request failed" />)
+
+    expect(screen.getByText('Python could not start')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Refresh the page and try again.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Network request failed')
+  })
 })
