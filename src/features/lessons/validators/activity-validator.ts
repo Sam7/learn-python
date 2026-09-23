@@ -152,6 +152,83 @@ if not any(
 ` : requirement === 'while-loop' ? `
 if not any(isinstance(node, ast.While) for node in ast.walk(tree)):
     raise AssertionError("Use while to repeat as long as a question stays True.")
+` : requirement === 'list-literal' ? `
+list_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not list_names:
+    raise AssertionError("Create a list and give it a name.")
+if not any(
+    isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    and any(isinstance(child, ast.Name) and child.id in list_names for arg in node.args for child in ast.walk(arg))
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Print the name of your list.")
+` : requirement === 'list-index' ? `
+list_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in list_names
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use square brackets to get an item from your list by its position.")
+` : requirement === 'subscript' ? `
+if not any(isinstance(node, ast.Subscript) for node in ast.walk(tree)):
+    raise AssertionError("Use square brackets to get an item by its position.")
+` : requirement === 'sequence-loop' ? `
+sequence_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign)
+    and (isinstance(node.value, ast.List) or (isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)))
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(node, ast.For) and isinstance(node.iter, ast.Name) and node.iter.id in sequence_names
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use for item in your_list to visit each value in the collection.")
+` : requirement === 'length-call' ? `
+if not any(
+    isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len"
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use len() to find how many values are in the collection.")
+` : requirement === 'membership-test' ? `
+if not any(
+    isinstance(node, ast.Compare) and any(isinstance(operator, ast.In) for operator in node.ops)
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use in to check whether a value is in the collection.")
+` : requirement === 'append-call' ? `
+list_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Attribute)
+    and node.func.attr == "append"
+    and isinstance(node.func.value, ast.Name)
+    and node.func.value.id in list_names
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use shopping.append(item) to add an item to the list.")
 ` : requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
@@ -289,6 +366,13 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'for-loop': 'Great work — your program repeats instructions with for.',
       'range-call': 'Great work — range() controls the repetitions.',
       'while-loop': 'Great work — your program repeats while its question stays True.',
+      'list-literal': 'Great work — your program creates and prints a list.',
+      'list-index': 'Great work — you used a position to get an item from the list.',
+      subscript: 'Great work — you used a position to get an item.',
+      'sequence-loop': 'Great work — your loop visits each value in the collection.',
+      'length-call': 'Great work — len() counts the values in the collection.',
+      'membership-test': 'Great work — your program checks whether a value is in the collection.',
+      'append-call': 'Great work — append() adds an item to the list.',
     }
     return messages[requirement]
   }
@@ -310,6 +394,13 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'for-loop': 'Use a for loop to repeat the instruction.',
     'range-call': 'Use range() to choose how many repetitions to make.',
     'while-loop': 'Use while to repeat as long as a question stays True.',
+    'list-literal': 'Create a list, give it a name, and print that name.',
+    'list-index': 'Use square brackets and a position to get an item from the list.',
+    subscript: 'Use square brackets and a position to get an item.',
+    'sequence-loop': 'Use for item in your_list to visit each value in the collection.',
+    'length-call': 'Use len() to find how many values are in the collection.',
+    'membership-test': 'Use in to check whether a value is in the collection.',
+    'append-call': 'Use list_name.append(item) to add an item to the list.',
   }
   return messages[requirement]
 }
@@ -401,7 +492,9 @@ async function validateCodeActivity(
     if (!echoedAnswersUsed || !outputIsCorrect) {
       return {
         passed: false,
-        message: 'Use the answers where they affect your program, then compare the result with the task.',
+        message: requiredInputs.length > 0
+          ? 'Use the answers where they affect your program, then compare the result with the task.'
+          : 'The result is not quite right yet. Compare your output with the task and try again.',
         evidence: testCase.output
           ? { expected: expectationDescription(testCase.output), actual: stdout || '(no output)' }
           : undefined,

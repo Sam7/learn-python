@@ -49,6 +49,13 @@ export type AstRequirement =
   | 'for-loop'
   | 'range-call'
   | 'while-loop'
+  | 'list-literal'
+  | 'list-index'
+  | 'subscript'
+  | 'sequence-loop'
+  | 'length-call'
+  | 'membership-test'
+  | 'append-call'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }

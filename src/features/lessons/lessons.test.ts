@@ -13,7 +13,7 @@ import {
   readyLessons,
   validateCurriculum,
 } from '../../curriculum/curriculum'
-import type { CodeActivity, LearningActivity } from '../../curriculum/types'
+import type { AstRequirement, CodeActivity, LearningActivity } from '../../curriculum/types'
 import type { PythonRunResult } from '../python/python-runner/types'
 import { getAdvanceTarget, getStepProgress } from '../learning/domain/progression'
 import { assessActivity } from './validators/activity-validator'
@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first five stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first six stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -94,9 +94,18 @@ describe('the canonical curriculum outline', () => {
       'The infinite loop',
       'Repeat until the user succeeds',
       'Build: launch sequence',
+      'One name, many values',
+      'Items have positions',
+      'Boundaries again',
+      'Do something for every item',
+      'Combine collections with decisions',
+      'Ask questions about collections',
+      'Collections can change',
+      'Strings are collections too',
+      'Build: analyse some scores',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(65)
-    expect(readyLessons).toHaveLength(44)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(56)
+    expect(readyLessons).toHaveLength(53)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -106,8 +115,10 @@ describe('the canonical curriculum outline', () => {
     expect(getNextCurriculumLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
     expect(getNextLesson('stage-2-lesson-10')?.title).toBe('Questions the computer can answer')
     expect(getNextLesson('stage-3-lesson-10')?.title).toBe('Discover the repetition problem')
-    expect(getNextCurriculumLesson('stage-4-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-4-lesson-10')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-4-lesson-10')?.title).toBe('One name, many values')
+    expect(getNextLesson('stage-4-lesson-10')?.title).toBe('One name, many values')
+    expect(getNextCurriculumLesson('stage-5-lesson-9')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-5-lesson-9')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -619,5 +630,73 @@ describe('Stage 4 repetition safety', () => {
       execution: success('finished\n'),
       runPython: noRun,
     })).toMatchObject({ passed: false, message: 'This program finished before the time limit. Make the loop condition stay True.' })
+  })
+})
+
+describe('Stage 5 collection AST requirements', () => {
+  it('describes ordinary output mismatches without referring to input answers', async () => {
+    const activity = getLessonById('stage-5-lesson-2')!.steps[1].activity!
+    if (activity.kind !== 'code') throw new Error('Expected a code activity')
+    const result = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('cat\ndog\n'),
+      runPython: async () => success('cat\ndog\n'),
+    })
+
+    expect(result).toMatchObject({
+      passed: false,
+      message: 'The result is not quite right yet. Compare your output with the task and try again.',
+    })
+  })
+
+  it.each([
+    ['list-literal', 'isinstance(node.value, ast.List)', 'scores = [8, 3, 10]\nprint(scores)'],
+    ['list-index', 'isinstance(node, ast.Subscript)', 'animals = ["cat", "dog"]\nprint(animals[0])'],
+    ['subscript', 'isinstance(node, ast.Subscript)', 'word = "python"\nprint(word[0])'],
+    ['sequence-loop', 'sequence_names', 'animals = ["cat", "dog"]\nfor animal in animals:\n    print(animal)'],
+    ['length-call', 'node.func.id == "len"', 'animals = ["cat", "dog"]\nprint(len(animals))'],
+    ['membership-test', 'isinstance(operator, ast.In)', 'animals = ["cat", "dog"]\nprint("dog" in animals)'],
+    ['append-call', 'node.func.attr == "append"', 'shopping = ["milk"]\nshopping.append("bread")\nprint(shopping)'],
+  ] satisfies Array<[AstRequirement, string, string]>)('checks %s through Python AST', async (requirement, pattern, code) => {
+    const activity: CodeActivity = {
+      id: `check-${requirement}`,
+      kind: 'code',
+      title: 'Use the concept',
+      prompt: 'Write the program.',
+      required: true,
+      starterCode: code,
+      assessment: { kind: 'ast', requirement },
+    }
+    let astSource = ''
+    const result = await assessActivity(activity, {
+      code,
+      execution: success(''),
+      runPython: async ({ code: source }) => {
+        astSource = source
+        return success('')
+      },
+    })
+
+    expect(result.passed).toBe(true)
+    expect(astSource).toContain(pattern)
+  })
+
+  it('gives a concrete hint when the learner does not use append()', async () => {
+    const activity: CodeActivity = {
+      id: 'append-to-shopping',
+      kind: 'code',
+      title: 'Add an item',
+      prompt: 'Add apples.',
+      required: true,
+      starterCode: 'shopping = ["milk"]',
+      assessment: { kind: 'ast', requirement: 'append-call' },
+    }
+    const result = await assessActivity(activity, {
+      code: 'shopping = ["milk"]\nshopping = shopping + ["apples"]\nprint(shopping)',
+      execution: success("['milk', 'apples']\n"),
+      runPython: async () => ({ ...success(''), status: 'error', error: 'AssertionError: Use shopping.append(item).' }),
+    })
+
+    expect(result).toMatchObject({ passed: false, message: 'Use list_name.append(item) to add an item to the list.' })
   })
 })

@@ -9,22 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 5,
-    title: 'Collections',
-    description: 'Keep related values together and work with them as a group.',
-    lessons: [
-      'One name, many values',
-      'Items have positions',
-      'Boundaries again',
-      'Do something for every item',
-      'Combine collections with decisions',
-      'Ask questions about collections',
-      'Collections can change',
-      'Strings are collections too',
-      'Build: analyse some scores',
-    ],
-  },
-  {
     order: 6,
     title: 'Functions and Abstraction',
     description: 'Give actions names, pass in information, and produce results.',

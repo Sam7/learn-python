@@ -5,10 +5,11 @@ import { stageOne } from './stages/stage-1'
 import { stageTwo } from './stages/stage-2'
 import { stageThree } from './stages/stage-3'
 import { stageFour } from './stages/stage-4'
+import { stageFive } from './stages/stage-5'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, ...futureStages],
+  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, stageFive, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {

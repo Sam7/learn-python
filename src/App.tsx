@@ -48,7 +48,7 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-0 lg:grid-cols-[auto_minmax(0,1fr)]">
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-0 lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
         <CurriculumNavigator
           key={activeStage.id}
           curriculum={session.curriculum}
