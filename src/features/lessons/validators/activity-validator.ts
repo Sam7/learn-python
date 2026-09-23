@@ -229,6 +229,72 @@ if not any(
     for node in ast.walk(tree)
 ):
     raise AssertionError("Use shopping.append(item) to add an item to the list.")
+` : requirement === 'function-definition' ? `
+function_names = {
+    node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+}
+if not function_names:
+    raise AssertionError("Define a function using def and give it a name.")
+` : requirement === 'function-call' ? `
+function_names = {
+    node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+}
+if not any(
+    isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id in function_names
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Call your function by writing its name followed by parentheses.")
+` : requirement === 'function-parameter' ? `
+if not any(
+    isinstance(node, ast.FunctionDef)
+    and bool(node.args.args)
+    and any(
+        isinstance(child, ast.Name)
+        and isinstance(child.ctx, ast.Load)
+        and child.id in {argument.arg for argument in node.args.args}
+        for child in ast.walk(node)
+    )
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Give the function a parameter and use that information inside it.")
+` : requirement === 'multiple-parameters' ? `
+if not any(
+    isinstance(node, ast.FunctionDef)
+    and len(node.args.args) >= 2
+    and {argument.arg for argument in node.args.args}.issubset({
+        child.id for child in ast.walk(node)
+        if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)
+    })
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Give the function two parameters and use both inside it.")
+` : requirement === 'function-return' ? `
+if not any(
+    isinstance(node, ast.FunctionDef)
+    and any(isinstance(child, ast.Return) and child.value is not None for child in ast.walk(node))
+    for node in ast.walk(tree)
+):
+    raise AssertionError("Use return to send a value back from the function.")
+` : requirement === 'local-scope' ? `
+local_names = {
+    node.id
+    for function in ast.walk(tree)
+    if isinstance(function, ast.FunctionDef)
+    for statement in function.body
+    for node in ast.walk(statement)
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+}
+names_used_after_definition = {
+    node.id
+    for statement in tree.body
+    if not isinstance(statement, ast.FunctionDef)
+    for node in ast.walk(statement)
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+}
+if not local_names.intersection(names_used_after_definition):
+    raise AssertionError("Try using a name assigned inside the function after the function finishes.")
 ` : requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
@@ -373,6 +439,12 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'length-call': 'Great work — len() counts the values in the collection.',
       'membership-test': 'Great work — your program checks whether a value is in the collection.',
       'append-call': 'Great work — append() adds an item to the list.',
+      'function-definition': 'Great work — you gave a reusable action a name with def.',
+      'function-call': 'Great work — you called the function you defined.',
+      'function-parameter': 'Great work — your function receives and uses information.',
+      'multiple-parameters': 'Great work — your function uses both pieces of information.',
+      'function-return': 'Great work — your function sends a value back with return.',
+      'local-scope': 'Good observation — a name created inside a function is not available outside it.',
     }
     return messages[requirement]
   }
@@ -401,6 +473,12 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'length-call': 'Use len() to find how many values are in the collection.',
     'membership-test': 'Use in to check whether a value is in the collection.',
     'append-call': 'Use list_name.append(item) to add an item to the list.',
+    'function-definition': 'Define a function using def and give it a name.',
+    'function-call': 'Call your function by writing its name followed by parentheses.',
+    'function-parameter': 'Give the function a parameter and use that information inside it.',
+    'multiple-parameters': 'Give the function two parameters and use both inside it.',
+    'function-return': 'Use return to send a value back from the function.',
+    'local-scope': 'Try using a name assigned inside the function after the function finishes.',
   }
   return messages[requirement]
 }
@@ -410,6 +488,7 @@ async function validateCodeActivity(
   context: ActivityAssessmentContext,
 ): Promise<ValidationResult> {
   const assessment = activity.assessment
+  const source = context.code ?? activity.starterCode
   if (assessment.kind === 'timeout') {
     if (context.execution.status === 'timeout') {
       return { passed: true, message: 'Good observation — Python stopped this run at the time limit.' }
@@ -423,6 +502,12 @@ async function validateCodeActivity(
     const errorLines = context.execution.error?.split('\n').map((line) => line.trimStart()) ?? []
     const expectedError = errorLines.some((line) => line.startsWith(`${assessment.exceptionName}:`))
     if (context.execution.status === 'error' && expectedError) {
+      for (const requirement of assessment.requirements ?? []) {
+        const result = await context.runPython({ code: pythonAstCheck(source, requirement) })
+        if (result.status !== 'success') {
+          return { passed: false, message: astAssessmentMessage(requirement, false) }
+        }
+      }
       return { passed: true, message: `Good observation — Python raised the expected ${assessment.exceptionName}.` }
     }
     if (context.execution.status === 'success') {
@@ -443,8 +528,6 @@ async function validateCodeActivity(
   }
 
   if (context.execution.status !== 'success') return failedExecution(context.execution)
-  const source = context.code ?? activity.starterCode
-
   if (assessment.kind === 'output') return validateOutputActivity(activity, context.execution.stdout)
 
   if (assessment.kind === 'output-and-ast' && !expectationMatches(assessment.expectation, context.execution.stdout)) {

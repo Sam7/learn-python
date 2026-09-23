@@ -56,13 +56,19 @@ export type AstRequirement =
   | 'length-call'
   | 'membership-test'
   | 'append-call'
+  | 'function-definition'
+  | 'function-call'
+  | 'function-parameter'
+  | 'multiple-parameters'
+  | 'function-return'
+  | 'local-scope'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
   | { kind: 'behavior'; cases: BehaviorTestCase[]; requirements?: AstRequirement[] }
   | { kind: 'timeout' }
-  | { kind: 'runtime-error'; exceptionName: string }
+  | { kind: 'runtime-error'; exceptionName: string; requirements?: AstRequirement[] }
   | { kind: 'ast'; requirement: AstRequirement; rejectOutput?: string[] }
 
 export interface CodeActivity extends ActivityBase {

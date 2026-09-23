@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first six stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first seven stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -103,9 +103,19 @@ describe('the canonical curriculum outline', () => {
       'Collections can change',
       'Strings are collections too',
       'Build: analyse some scores',
+      'You have been using functions all along',
+      'Give an action a name',
+      'Give a function information',
+      'Multiple inputs',
+      'Producing a value',
+      'return is not print',
+      'Functions can be combined',
+      'Local state',
+      'Functions as contracts',
+      'Build: mini maths toolkit',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(56)
-    expect(readyLessons).toHaveLength(53)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(46)
+    expect(readyLessons).toHaveLength(63)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -117,8 +127,10 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-3-lesson-10')?.title).toBe('Discover the repetition problem')
     expect(getNextCurriculumLesson('stage-4-lesson-10')?.title).toBe('One name, many values')
     expect(getNextLesson('stage-4-lesson-10')?.title).toBe('One name, many values')
-    expect(getNextCurriculumLesson('stage-5-lesson-9')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-5-lesson-9')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-5-lesson-9')?.title).toBe('You have been using functions all along')
+    expect(getNextLesson('stage-5-lesson-9')?.title).toBe('You have been using functions all along')
+    expect(getNextCurriculumLesson('stage-6-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-6-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -698,5 +710,89 @@ describe('Stage 5 collection AST requirements', () => {
     })
 
     expect(result).toMatchObject({ passed: false, message: 'Use list_name.append(item) to add an item to the list.' })
+  })
+})
+
+describe('Stage 6 function AST requirements', () => {
+  it.each([
+    ['function-definition', 'isinstance(node, ast.FunctionDef)', 'def cheer():\n    print("You can do it!")\n\ncheer()'],
+    ['function-call', 'node.func.id in function_names', 'def cheer():\n    print("You can do it!")\n\ncheer()'],
+    ['function-parameter', 'argument.arg for argument in node.args.args', 'def greet(name):\n    print("Hello", name)\n\ngreet("Mia")'],
+    ['multiple-parameters', 'len(node.args.args) >= 2', 'def show_score(name, score):\n    print(name, score)\n\nshow_score("Mia", 8)'],
+    ['function-return', 'isinstance(child, ast.Return) and child.value is not None', 'def double(number):\n    return number * 2\n\nprint(double(6))'],
+    ['local-scope', 'names_used_after_definition', 'def calculate():\n    result = 10\n    print(result)\n\ncalculate()\nprint(result)'],
+  ] satisfies Array<[AstRequirement, string, string]>)('checks %s through Python AST', async (requirement, pattern, code) => {
+    const activity: CodeActivity = {
+      id: `check-${requirement}`,
+      kind: 'code',
+      title: 'Use the concept',
+      prompt: 'Write the program.',
+      required: true,
+      starterCode: code,
+      assessment: { kind: 'ast', requirement },
+    }
+    let astSource = ''
+    const result = await assessActivity(activity, {
+      code,
+      execution: success(''),
+      runPython: async ({ code: source }) => {
+        astSource = source
+        return success('')
+      },
+    })
+
+    expect(result.passed).toBe(true)
+    expect(astSource).toContain(pattern)
+  })
+
+  it('gives an actionable hint when a value is printed instead of returned', async () => {
+    const activity: CodeActivity = {
+      id: 'return-a-value',
+      kind: 'code',
+      title: 'Send back an answer',
+      prompt: 'Return the doubled number.',
+      required: true,
+      starterCode: 'def double(number):\n    print(number * 2)',
+      assessment: { kind: 'ast', requirement: 'function-return' },
+    }
+    const result = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('12\n'),
+      runPython: async () => ({ ...success(''), status: 'error', error: 'AssertionError: Use return.' }),
+    })
+
+    expect(result).toMatchObject({
+      passed: false,
+      message: 'Use return to send a value back from the function.',
+    })
+  })
+
+  it('only accepts the expected local-name error when the code demonstrates function scope', async () => {
+    const activity: CodeActivity = {
+      id: 'notice-local-scope',
+      kind: 'code',
+      title: 'Notice a local name',
+      prompt: 'Observe what happens after the function finishes.',
+      required: true,
+      starterCode: 'def calculate():\n    result = 10\n    print(result)\n\ncalculate()\nprint(result)',
+      assessment: { kind: 'runtime-error', exceptionName: 'NameError', requirements: ['local-scope'] },
+    }
+    expect(await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: { ...success('10\n'), status: 'error', error: 'NameError: name \'result\' is not defined' },
+      runPython: async () => success(''),
+    })).toMatchObject({ passed: true })
+
+    const unrelatedError = await assessActivity(activity, {
+      code: 'print(missing_name)',
+      execution: { ...success(''), status: 'error', error: 'NameError: name \'missing_name\' is not defined' },
+      runPython: async ({ code }) => code.includes('names_used_after_definition')
+        ? ({ ...success(''), status: 'error', error: 'AssertionError: not a local-scope example' })
+        : success(''),
+    })
+    expect(unrelatedError).toMatchObject({
+      passed: false,
+      message: 'Try using a name assigned inside the function after the function finishes.',
+    })
   })
 })

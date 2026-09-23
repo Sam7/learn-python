@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 6,
-    title: 'Functions and Abstraction',
-    description: 'Give actions names, pass in information, and produce results.',
-    lessons: [
-      'You have been using functions all along',
-      'Give an action a name',
-      'Give a function information',
-      'Multiple inputs',
-      'Producing a value',
-      'return is not print',
-      'Functions can be combined',
-      'Local state',
-      'Functions as contracts',
-      'Build: mini maths toolkit',
-    ],
-  },
-  {
     order: 7,
     title: 'Reusable Algorithmic Patterns',
     description: 'Recognise useful shapes for totals, counts, searches, and more.',

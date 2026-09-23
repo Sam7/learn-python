@@ -624,9 +624,89 @@ test('Stage 5: collections, positions, iteration, and questions work through the
   await runAndExpectPass(page, 'scores = [8, 3, 10, 6, 9]\nprint(len(scores))')
   await capture(page, testInfo, 'stage-5-score-analysis-desktop')
   await expect(page.getByRole('button', { name: /Collections Stage complete/ })).toContainText('9/9 ready')
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'You have been using functions all along' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'You have been using functions all along' })).toBeVisible()
+})
+
+test('Stage 6: functions, parameters, return values, and scope work through the full chapter', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(300_000)
+  await openLesson(page, 'stage-6-lesson-1', 'spot-familiar-functions')
+  await expect(page.getByRole('heading', { name: 'You have been using functions all along' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'They call a function by writing its name and parentheses.' }).click()
+  await expect(page.getByRole('status')).toContainText('the name tells Python which function to use')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'word = "python"\nprint(len(word))\nprint(int("12") + 1)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('The program starts\nThe program continues')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed The program starts')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'def cheer():\n    print("You can do it!")\n\ncheer()\ncheer()')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'def greet(name):\n    print("Hello", name)\n\ngreet("Mia")\ngreet("Leo")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'show_score("Mia", 8)' }).click()
+  await expect(page.getByRole('status')).toContainText('the first value goes to name')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await setEditorCode(page, 'def show_score(name, score):\n    print(name, "scored", score)\n\nshow_score(8, "Mia")\nshow_score(10, "Leo")')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('not quite right yet')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await runAndExpectPass(page, 'def show_score(name, score):\n    print(name, "scored", score)\n\nshow_score("Mia", 8)\nshow_score("Leo", 10)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nprint(double(6))\nprint(double(9))')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Return number * 2 from inside the function.' }).click()
+  await expect(page.getByRole('status')).toContainText('return supplies the value')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await setEditorCode(page, 'def double(number):\n    print(number * 2)\n\nprint(double(6) + 1)\nprint(double(9) + 1)')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('TypeError', { timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nprint(double(6) + 1)\nprint(double(9) + 1)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('11')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 11')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\ndef add_one(number):\n    return number + 1\n\nprint(add_one(double(5)))\nprint(add_one(double(7)))')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Inside calculate(), where the name was created.' }).click()
+  await expect(page.getByRole('status')).toContainText('result is local to calculate()')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('NameError', { timeout: 20_000 })
+  await expect(page.getByRole('status')).toContainText('raised the expected NameError')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Return width * height.' }).click()
+  await expect(page.getByRole('status')).toContainText('multiplying the two inputs')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'def area(width, height):\n    return width * height\n\nprint(area(3, 4))\nprint(area(5, 2))')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nprint(double(3))\nprint(double(6))')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'def is_even(number):\n    return number % 2 == 0\n\nprint(is_even(4))\nprint(is_even(7))')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'def larger(a, b):\n    if a > b:\n        return a\n    return b\n\nprint(larger(3, 4))\nprint(larger(5, 2))\nprint(larger(7, 7))')
+  await capture(page, testInfo, 'stage-6-mini-toolkit-desktop')
+  await expect(page.getByRole('button', { name: /Functions and Abstraction Stage complete/ })).toContainText('10/10 ready')
   await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Build: analyse some scores' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Build: mini maths toolkit' })).toBeVisible()
 })
 
 test('invalid Python and runaway code show useful feedback and recover', async ({ page, browserName }) => {
@@ -857,6 +937,38 @@ test('collection code and output stay usable at iPad landscape and portrait size
   await output.scrollIntoViewIfNeeded()
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
   await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-5-score-filter`)
+})
+
+test('function return lesson stays usable at iPad landscape and portrait sizes @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Responsive function coverage uses WebKit iPad projects.')
+  test.setTimeout(120_000)
+  await openLesson(page, 'stage-6-lesson-6', 'use-the-returned-value')
+  await expect(page.getByRole('heading', { name: 'return is not print' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nprint(double(6) + 1)\nprint(double(9) + 1)')
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  const output = page.getByRole('region', { name: 'Python output' })
+  await output.scrollIntoViewIfNeeded()
+  await expect(output).toContainText('13')
+  await expect(output).toContainText('19')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-6-return-value`)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('heading', { name: 'return is not print' })).toBeVisible()
+  await output.scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-6-return-value`)
 })
 
 async function verifyViewport(page: Page) {
