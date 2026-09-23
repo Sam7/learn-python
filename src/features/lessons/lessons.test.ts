@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first seven stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first eight stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -113,9 +113,19 @@ describe('the canonical curriculum outline', () => {
       'Local state',
       'Functions as contracts',
       'Build: mini maths toolkit',
+      'Total / accumulate',
+      'Count',
+      'Average combines patterns',
+      'Search',
+      'Best so far',
+      'Transform',
+      'Filter',
+      'Validate / repeat until acceptable',
+      'Recognise the pattern',
+      'Pattern transfer',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(46)
-    expect(readyLessons).toHaveLength(63)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(36)
+    expect(readyLessons).toHaveLength(73)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -129,8 +139,10 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-4-lesson-10')?.title).toBe('One name, many values')
     expect(getNextCurriculumLesson('stage-5-lesson-9')?.title).toBe('You have been using functions all along')
     expect(getNextLesson('stage-5-lesson-9')?.title).toBe('You have been using functions all along')
-    expect(getNextCurriculumLesson('stage-6-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-6-lesson-10')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-6-lesson-10')?.title).toBe('Total / accumulate')
+    expect(getNextLesson('stage-6-lesson-10')?.title).toBe('Total / accumulate')
+    expect(getNextCurriculumLesson('stage-7-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-7-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -793,6 +805,62 @@ describe('Stage 6 function AST requirements', () => {
     expect(unrelatedError).toMatchObject({
       passed: false,
       message: 'Try using a name assigned inside the function after the function finishes.',
+    })
+  })
+})
+
+describe('Stage 7 reusable algorithm pattern AST requirements', () => {
+  it.each([
+    ['total-accumulator', 'adds_current_item', 'numbers = [4, 7, 2]\ntotal = 0\nfor number in numbers:\n    total = total + number\nprint(total)'],
+    ['count-if', 'increments(node, counter_name)', 'scores = [4, 9, 2]\ncount = 0\nfor score in scores:\n    if score >= 7:\n        count = count + 1\nprint(count)'],
+    ['search-flag', 'false_names', 'names = ["Mia", "Leo"]\nwanted = "Leo"\nfound = False\nfor name in names:\n    if name == wanted:\n        found = True\nprint(found)'],
+    ['best-so-far', 'best_names', 'scores = [6, 3, 9, 7]\nbest = scores[0]\nfor score in scores:\n    if score > best:\n        best = score\nprint(best)'],
+    ['transform-list', 'empty_list_names', 'numbers = [1, 2, 3]\ndoubled = []\nfor number in numbers:\n    doubled.append(number * 2)\nprint(doubled)'],
+    ['filter-list', 'decision.body', 'scores = [4, 9, 2]\nhigh_scores = []\nfor score in scores:\n    if score >= 7:\n        high_scores.append(score)\nprint(high_scores)'],
+    ['input-validation-loop', 'loop.test', 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)'],
+  ] satisfies Array<[AstRequirement, string, string]>)('checks %s as a Python AST pattern', async (requirement, pattern, code) => {
+    const activity: CodeActivity = {
+      id: `check-${requirement}`,
+      kind: 'code',
+      title: 'Use the pattern',
+      prompt: 'Write the algorithm.',
+      required: true,
+      starterCode: code,
+      assessment: { kind: 'ast', requirement },
+    }
+    let astSource = ''
+    const result = await assessActivity(activity, {
+      code,
+      execution: success(''),
+      runPython: async ({ code: source }) => {
+        astSource = source
+        return success('')
+      },
+    })
+
+    expect(result.passed).toBe(true)
+    expect(astSource).toContain(pattern)
+  })
+
+  it('gives a pattern-focused hint when counting items without a condition', async () => {
+    const activity: CodeActivity = {
+      id: 'count-only-if-passing',
+      kind: 'code',
+      title: 'Count passing scores',
+      prompt: 'Count scores of at least 7.',
+      required: true,
+      starterCode: 'scores = [4, 9, 2]\ncount = 0\nfor score in scores:\n    count = count + 1\nprint(count)',
+      assessment: { kind: 'ast', requirement: 'count-if' },
+    }
+    const result = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('3\n'),
+      runPython: async () => ({ ...success(''), status: 'error', error: 'AssertionError: count only when an item passes.' }),
+    })
+
+    expect(result).toMatchObject({
+      passed: false,
+      message: 'Start a count at 0 and add 1 only when an item passes an if test.',
     })
   })
 })

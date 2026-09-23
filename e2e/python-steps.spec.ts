@@ -56,8 +56,8 @@ async function answerLivePrompt(page: Page, value: string, answerNumber: number)
   await page.getByRole('button', { name: /Send answer/ }).click()
 }
 
-async function capture(page: Page, testInfo: TestInfo, label: string) {
-  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+async function capture(page: Page, testInfo: TestInfo, label: string, scrollToTop = true) {
+  if (scrollToTop) await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
   await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-${label}.png`, fullPage: false })
 }
 
@@ -704,9 +704,91 @@ test('Stage 6: functions, parameters, return values, and scope work through the 
   await runAndExpectPass(page, 'def larger(a, b):\n    if a > b:\n        return a\n    return b\n\nprint(larger(3, 4))\nprint(larger(5, 2))\nprint(larger(7, 7))')
   await capture(page, testInfo, 'stage-6-mini-toolkit-desktop')
   await expect(page.getByRole('button', { name: /Functions and Abstraction Stage complete/ })).toContainText('10/10 ready')
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Total / accumulate' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Total / accumulate' })).toBeVisible()
+})
+
+test('Stage 7: algorithm patterns work across the full chapter and transfer to new examples', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(300_000)
+  await openLesson(page, 'stage-7-lesson-1', 'build-the-total-pattern')
+  await expect(page.getByRole('heading', { name: 'Total / accumulate' })).toBeVisible()
+
+  await setEditorCode(page, 'numbers = [4, 7, 2]\ntotal = 1\nfor number in numbers:\n    total = total + number\nprint(total)')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('not quite right yet')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await runAndExpectPass(page, 'numbers = [4, 7, 2]\ntotal = 0\nfor number in numbers:\n    total = total + number\nprint(total)')
+  await page.locator('.cm-content').scrollIntoViewIfNeeded()
+  await capture(page, testInfo, 'stage-7-code-workspace-desktop', false)
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'scores = [4, 9, 2, 10, 7]\ncount = 0\nfor score in scores:\n    if score >= 7:\n        count = count + 1\nprint(count)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('32\n5\n6.4')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 32')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'scores = [4, 9, 2, 10, 7]\ntotal = 0\nfor score in scores:\n    total = total + score\ncount = len(scores)\naverage = total / count\nprint(average)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await setEditorCode(page, 'names = ["Mia", "Leo", "Ava"]\nwanted = input("Name to find: ")\nfound = False\nfor name in names:\n    if name == wanted:\n        found = True\nprint(found)')
+  await runStarterWithAnswers(page, ['Leo'])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('6\n6\n9\n9')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 6')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'scores = [-6, -3, -9, -7]\nbest = scores[0]\nfor score in scores:\n    if score > best:\n        best = score\nprint(best)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'numbers = [1, -2, 3]\ndoubled = []\nfor number in numbers:\n    doubled.append(number * 2)\nprint(doubled)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'scores = [4, 9, 2, 10, 7]\nhigh_scores = []\nfor score in scores:\n    if score >= 7:\n        high_scores.append(score)\nprint(high_scores)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await setEditorCode(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)')
+  await runStarterWithAnswers(page, ['-1', '12'])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  const patternAnswers = [
+    ['Count items that pass a test', 'check each day and add 1 for every rainy one'],
+    ['Keep the best value so far', 'keep the hottest value found so far'],
+    ['Keep items that pass a test', 'keep each name that passes'],
+    ['Transform every item', 'transform every temperature'],
+    ['Search for a match', 'search until you find a match'],
+  ] as const
+  for (const [answer, feedback] of patternAnswers) {
+    await page.getByRole('button', { name: answer }).click()
+    await expect(page.getByRole('status')).toContainText(feedback)
+    if (answer !== 'Search for a match') await page.getByRole('button', { name: 'Next step' }).click()
+  }
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'scores = [4, 9, 2, 10, 7]\ncount = 0\nfor score in scores:\n    if score >= 7:\n        count = count + 1\nprint(count)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'rained = [True, False, True, True]\nrainy_days = 0\nfor did_rain in rained:\n    if did_rain:\n        rainy_days = rainy_days + 1\nprint(rainy_days)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'words = ["water", "planet", "sun", "library"]\nlong_words = 0\nfor word in words:\n    if len(word) > 5:\n        long_words = long_words + 1\nprint(long_words)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await expect(page.getByText('These problems looked different, but each used the same count-if pattern.')).toBeVisible()
+  await capture(page, testInfo, 'stage-7-pattern-transfer-desktop')
+  await expect(page.getByRole('button', { name: /Reusable Algorithmic Patterns Stage complete/ })).toContainText('10/10 ready')
   await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Build: mini maths toolkit' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pattern transfer' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('python-steps:progress') ?? '{}') as {
+      activityProgress?: Record<string, { code?: string }>
+    }
+    return saved.activityProgress?.['transfer-count-to-word-lengths']?.code
+  })).toContain('long_words = long_words + 1')
 })
 
 test('invalid Python and runaway code show useful feedback and recover', async ({ page, browserName }) => {
@@ -969,6 +1051,38 @@ test('function return lesson stays usable at iPad landscape and portrait sizes @
   await output.scrollIntoViewIfNeeded()
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
   await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-6-return-value`)
+})
+
+test('validation retry remains usable at iPad landscape and portrait sizes @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Responsive input-loop coverage uses WebKit iPad projects.')
+  test.setTimeout(120_000)
+  await openLesson(page, 'stage-7-lesson-8', 'ask-again-when-age-is-negative')
+  await expect(page.getByRole('heading', { name: 'Validate / repeat until acceptable' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+  await setEditorCode(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)')
+  await runStarterWithAnswers(page, ['-1', '12'])
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  const output = page.getByRole('region', { name: 'Python output' })
+  await output.scrollIntoViewIfNeeded()
+  await expect(output).toContainText('12')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-7-validation`)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('heading', { name: 'Validate / repeat until acceptable' })).toBeVisible()
+  await output.scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-7-validation`)
 })
 
 async function verifyViewport(page: Page) {

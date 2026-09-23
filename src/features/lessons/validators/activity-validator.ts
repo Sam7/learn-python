@@ -295,6 +295,271 @@ names_used_after_definition = {
 }
 if not local_names.intersection(names_used_after_definition):
     raise AssertionError("Try using a name assigned inside the function after the function finishes.")
+` : requirement === 'total-accumulator' ? `
+zero_names = {
+    target.id: node.lineno
+    for node in tree.body
+    if isinstance(node, ast.Assign)
+    and isinstance(node.value, ast.Constant)
+    and type(node.value.value) in (int, float)
+    and node.value.value == 0
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+def adds_current_item(loop, item_name, counter_name):
+    for node in ast.walk(loop):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == counter_name for target in node.targets
+        ) and isinstance(node.value, ast.BinOp) and isinstance(node.value.op, ast.Add):
+            sides = (node.value.left, node.value.right)
+            if any(isinstance(side, ast.Name) and side.id == counter_name for side in sides) and any(
+                isinstance(side, ast.Name) and side.id == item_name for side in sides
+            ):
+                return True
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id == counter_name:
+            if isinstance(node.op, ast.Add) and isinstance(node.value, ast.Name) and node.value.id == item_name:
+                return True
+    return False
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and any(
+        counter_name in zero_names
+        and zero_names[counter_name] < loop.lineno
+        and adds_current_item(loop, loop.target.id, counter_name)
+        for counter_name in zero_names
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Start a total at 0, then add each loop value to it.")
+` : requirement === 'count-if' ? `
+zero_names = {
+    target.id: node.lineno
+    for node in tree.body
+    if isinstance(node, ast.Assign)
+    and isinstance(node.value, ast.Constant)
+    and type(node.value.value) is int
+    and node.value.value == 0
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+def increments(node, counter_name):
+    if isinstance(node, ast.AugAssign):
+        return isinstance(node.target, ast.Name) and node.target.id == counter_name and isinstance(node.op, ast.Add) and isinstance(node.value, ast.Constant) and node.value.value == 1
+    return (
+        isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == counter_name for target in node.targets)
+        and isinstance(node.value, ast.BinOp)
+        and isinstance(node.value.op, ast.Add)
+        and isinstance(node.value.left, ast.Name)
+        and node.value.left.id == counter_name
+        and isinstance(node.value.right, ast.Constant)
+        and node.value.right.value == 1
+    )
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and any(
+        counter_name in zero_names
+        and zero_names[counter_name] < loop.lineno
+        and any(
+            isinstance(decision, ast.If)
+            and any(isinstance(child, ast.Name) and child.id == loop.target.id for child in ast.walk(decision.test))
+            and any(increments(child, counter_name) for statement in decision.body for child in ast.walk(statement))
+            for decision in ast.walk(loop)
+            if isinstance(decision, ast.If)
+        )
+        for counter_name in zero_names
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Start a count at 0 and add 1 only when an item passes an if test.")
+` : requirement === 'search-flag' ? `
+false_names = {
+    target.id: node.lineno
+    for node in tree.body
+    if isinstance(node, ast.Assign)
+    and isinstance(node.value, ast.Constant)
+    and node.value.value is False
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and any(
+        isinstance(decision, ast.If)
+        and any(isinstance(child, ast.Name) and child.id == loop.target.id for child in ast.walk(decision.test))
+        and any(
+            isinstance(update, ast.Assign)
+            and isinstance(update.value, ast.Constant)
+            and update.value.value is True
+            and any(
+                isinstance(target, ast.Name)
+                and target.id in false_names
+                and false_names[target.id] < loop.lineno
+                for target in update.targets
+            )
+            for statement in decision.body
+            for update in ast.walk(statement)
+        )
+        for decision in ast.walk(loop)
+        if isinstance(decision, ast.If)
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Start a found flag at False, then set it to True when the loop finds a match.")
+` : requirement === 'best-so-far' ? `
+list_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+best_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign)
+    and isinstance(node.value, ast.Subscript)
+    and isinstance(node.value.value, ast.Name)
+    and node.value.value.id in list_names
+    and isinstance(node.value.slice, ast.Constant)
+    and node.value.slice.value == 0
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and loop.iter.id in list_names
+    and any(
+        isinstance(decision, ast.If)
+        and any(
+            isinstance(child, ast.Compare)
+            and any(isinstance(value, ast.Name) and value.id == loop.target.id for value in ast.walk(child))
+            and any(isinstance(value, ast.Name) and value.id in best_names for value in ast.walk(child))
+            for child in ast.walk(decision.test)
+        )
+        and any(
+            isinstance(update, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id in best_names for target in update.targets)
+            and isinstance(update.value, ast.Name)
+            and update.value.id == loop.target.id
+            for statement in decision.body
+            for update in ast.walk(statement)
+        )
+        for decision in ast.walk(loop)
+        if isinstance(decision, ast.If)
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Start best with the first item, then replace it when a better item appears.")
+` : requirement === 'transform-list' ? `
+list_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+empty_list_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List) and not node.value.elts
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and loop.iter.id in list_names
+    and any(
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "append"
+        and isinstance(call.func.value, ast.Name)
+        and call.func.value.id in empty_list_names
+        and call.func.value.id != loop.iter.id
+        and any(isinstance(child, ast.Name) and child.id == loop.target.id for child in ast.walk(argument))
+        and not isinstance(argument, ast.Name)
+        for statement in loop.body
+        for call in ast.walk(statement)
+        if isinstance(call, ast.Call)
+        for argument in call.args
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Make a new empty list and append a changed version of each item in a loop.")
+` : requirement === 'filter-list' ? `
+list_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+empty_list_names = {
+    target.id
+    for node in tree.body
+    if isinstance(node, ast.Assign) and isinstance(node.value, ast.List) and not node.value.elts
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+if not any(
+    isinstance(loop, ast.For)
+    and isinstance(loop.target, ast.Name)
+    and isinstance(loop.iter, ast.Name)
+    and loop.iter.id in list_names
+    and any(
+        isinstance(decision, ast.If)
+        and any(isinstance(child, ast.Name) and child.id == loop.target.id for child in ast.walk(decision.test))
+        and any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "append"
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id in empty_list_names
+            and isinstance(argument, ast.Name)
+            and argument.id == loop.target.id
+            for statement in decision.body
+            for call in ast.walk(statement)
+            if isinstance(call, ast.Call)
+            for argument in call.args
+        )
+        for decision in ast.walk(loop)
+        if isinstance(decision, ast.If)
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Keep a separate list, then append an item only when it passes the if test.")
+` : requirement === 'input-validation-loop' ? `
+if not any(
+    isinstance(loop, ast.While)
+    and any(
+        isinstance(condition_name, ast.Name)
+        and any(
+            isinstance(assignment, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == condition_name.id for target in assignment.targets)
+            and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "input"
+                for call in ast.walk(assignment.value)
+            )
+            for statement in loop.body
+            for assignment in ast.walk(statement)
+        )
+        for condition_name in ast.walk(loop.test)
+    )
+    for loop in ast.walk(tree)
+):
+    raise AssertionError("Ask again for the value being checked inside the while loop.")
 ` : requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
@@ -445,6 +710,13 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'multiple-parameters': 'Great work — your function uses both pieces of information.',
       'function-return': 'Great work — your function sends a value back with return.',
       'local-scope': 'Good observation — a name created inside a function is not available outside it.',
+      'total-accumulator': 'Great work — you carried a running total through the loop.',
+      'count-if': 'Great work — you counted only the items that passed the test.',
+      'search-flag': 'Great work — your flag remembers whether the loop found a match.',
+      'best-so-far': 'Great work — you kept the best value found so far.',
+      'transform-list': 'Great work — you built a new list from changed items.',
+      'filter-list': 'Great work — you kept only items that passed the test.',
+      'input-validation-loop': 'Great work — your program asks again until the value is acceptable.',
     }
     return messages[requirement]
   }
@@ -479,6 +751,13 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'multiple-parameters': 'Give the function two parameters and use both inside it.',
     'function-return': 'Use return to send a value back from the function.',
     'local-scope': 'Try using a name assigned inside the function after the function finishes.',
+    'total-accumulator': 'Start a total at 0, then add each loop value to it.',
+    'count-if': 'Start a count at 0 and add 1 only when an item passes an if test.',
+    'search-flag': 'Start a found flag at False, then set it to True when the loop finds a match.',
+    'best-so-far': 'Start best with the first item, then replace it when a better item appears.',
+    'transform-list': 'Make a new empty list and append a changed version of each item in a loop.',
+    'filter-list': 'Keep a separate list, then append an item only when it passes the if test.',
+    'input-validation-loop': 'Ask again for the value being checked inside the while loop.',
   }
   return messages[requirement]
 }

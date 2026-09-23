@@ -62,6 +62,13 @@ export type AstRequirement =
   | 'multiple-parameters'
   | 'function-return'
   | 'local-scope'
+  | 'total-accumulator'
+  | 'count-if'
+  | 'search-flag'
+  | 'best-so-far'
+  | 'transform-list'
+  | 'filter-list'
+  | 'input-validation-loop'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }

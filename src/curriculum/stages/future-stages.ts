@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 7,
-    title: 'Reusable Algorithmic Patterns',
-    description: 'Recognise useful shapes for totals, counts, searches, and more.',
-    lessons: [
-      'Total / accumulate',
-      'Count',
-      'Average combines patterns',
-      'Search',
-      'Best so far',
-      'Transform',
-      'Filter',
-      'Validate / repeat until acceptable',
-      'Recognise the pattern',
-      'Pattern transfer',
-    ],
-  },
-  {
     order: 8,
     title: 'Representing Information',
     description: 'Choose useful structures for information about one thing or many.',
