@@ -1,35 +1,20 @@
-import type { Curriculum, LearningActivity, Lesson, LessonStep, Module } from './types'
-import { collectionsModule } from './modules/collections'
-import { decisionsModule } from './modules/decisions'
-import { fundamentalsModule } from './modules/fundamentals'
-import { functionsModule } from './modules/functions'
-import { inputModule } from './modules/input'
-import { loopsModule } from './modules/loops'
-import { projectsModule } from './modules/projects'
-import { typesModule } from './modules/types'
+import type { Curriculum, LearningActivity, Lesson, LessonStep, Stage } from './types'
+import { futureStages } from './stages/future-stages'
+import { stageZero } from './stages/stage-0'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  modules: [
-    fundamentalsModule,
-    inputModule,
-    typesModule,
-    decisionsModule,
-    loopsModule,
-    collectionsModule,
-    functionsModule,
-    projectsModule,
-  ],
+  stages: [stageZero, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {
   return {
     ...definition,
-    modules: [...definition.modules]
+    stages: [...definition.stages]
       .sort((left, right) => left.order - right.order)
-      .map((module) => ({
-        ...module,
-        lessons: [...module.lessons].sort((left, right) => left.order - right.order),
+      .map((stage) => ({
+        ...stage,
+        lessons: [...stage.lessons].sort((left, right) => left.order - right.order),
       })),
   }
 }
@@ -38,8 +23,8 @@ export const curriculum = orderCurriculum(curriculumDefinition)
 
 assertValidCurriculum(curriculum)
 
-export const modules = curriculum.modules
-export const allLessons = modules.flatMap((module) => module.lessons)
+export const stages = curriculum.stages
+export const allLessons = stages.flatMap((stage) => stage.lessons)
 export const readyLessons = allLessons.filter((lesson) => lesson.status === 'ready')
 export const lessonIds = allLessons.map((lesson) => lesson.id)
 
@@ -47,18 +32,18 @@ export function getLessonById(id: string): Lesson | undefined {
   return allLessons.find((lesson) => lesson.id === id)
 }
 
-export function getModuleById(id: string): Module | undefined {
-  return modules.find((module) => module.id === id)
+export function getStageById(id: string): Stage | undefined {
+  return stages.find((stage) => stage.id === id)
 }
 
-export function getModuleForLesson(lessonId: string): Module | undefined {
-  return modules.find((module) => module.lessons.some((lesson) => lesson.id === lessonId))
+export function getStageForLesson(lessonId: string): Stage | undefined {
+  return stages.find((stage) => stage.lessons.some((lesson) => lesson.id === lessonId))
 }
 
 export function getLessonLocation(lessonId: string) {
-  const module = getModuleForLesson(lessonId)
-  const lesson = module?.lessons.find((item) => item.id === lessonId)
-  return module && lesson ? { module, lesson } : undefined
+  const stage = getStageForLesson(lessonId)
+  const lesson = stage?.lessons.find((item) => item.id === lessonId)
+  return stage && lesson ? { stage, lesson } : undefined
 }
 
 export function getPreviousLesson(lessonId: string): Lesson | undefined {
@@ -69,6 +54,11 @@ export function getPreviousLesson(lessonId: string): Lesson | undefined {
 export function getNextLesson(lessonId: string): Lesson | undefined {
   const currentIndex = readyLessons.findIndex((lesson) => lesson.id === lessonId)
   return currentIndex >= 0 ? readyLessons[currentIndex + 1] : undefined
+}
+
+export function getNextCurriculumLesson(lessonId: string): Lesson | undefined {
+  const currentIndex = allLessons.findIndex((lesson) => lesson.id === lessonId)
+  return currentIndex >= 0 ? allLessons[currentIndex + 1] : undefined
 }
 
 export function getFirstReadyLesson(): Lesson | undefined {
@@ -105,24 +95,24 @@ export function getCompletedLessonIds(completedActivityIds: string[]): string[] 
 
 export function validateCurriculum(curriculumData: Curriculum): string[] {
   const issues: string[] = []
-  const moduleIds = new Set<string>()
+  const stageIds = new Set<string>()
   const lessonIdsSeen = new Set<string>()
   const activityIds = new Set<string>()
-  const moduleOrderValues = new Set<number>()
+  const stageOrderValues = new Set<number>()
 
-  for (const [moduleIndex, module] of curriculumData.modules.entries()) {
-    if (!module.id.trim()) issues.push(`Module at position ${moduleIndex + 1} has no id.`)
-    if (moduleIds.has(module.id)) issues.push(`Duplicate module id: ${module.id}.`)
-    moduleIds.add(module.id)
-    if (!Number.isInteger(module.order) || module.order <= 0) issues.push(`Module ${module.id} must have a positive integer order.`)
-    if (moduleOrderValues.has(module.order)) issues.push(`Duplicate module order: ${module.order}.`)
-    moduleOrderValues.add(module.order)
+  for (const [stageIndex, stage] of curriculumData.stages.entries()) {
+    if (!stage.id.trim()) issues.push(`Stage at position ${stageIndex + 1} has no id.`)
+    if (stageIds.has(stage.id)) issues.push(`Duplicate stage id: ${stage.id}.`)
+    stageIds.add(stage.id)
+    if (!Number.isInteger(stage.order) || stage.order < 0) issues.push(`Stage ${stage.id} must have a non-negative integer order.`)
+    if (stageOrderValues.has(stage.order)) issues.push(`Duplicate stage order: ${stage.order}.`)
+    stageOrderValues.add(stage.order)
 
-    for (const [lessonIndex, lesson] of module.lessons.entries()) {
-      if (!lesson.id.trim()) issues.push(`A lesson in ${module.id} has no id.`)
+    for (const [lessonIndex, lesson] of stage.lessons.entries()) {
+      if (!lesson.id.trim()) issues.push(`A lesson in ${stage.id} has no id.`)
       if (lessonIdsSeen.has(lesson.id)) issues.push(`Duplicate lesson id: ${lesson.id}.`)
       lessonIdsSeen.add(lesson.id)
-      if (lesson.order <= 0) issues.push(`Lesson ${lesson.id} must have a positive order.`)
+      if (!Number.isInteger(lesson.order) || lesson.order <= 0) issues.push(`Lesson ${lesson.id} must have a positive integer order.`)
       if (lesson.status === 'ready' && lesson.steps.length === 0) {
         issues.push(`Ready lesson ${lesson.id} needs at least one step.`)
       }
@@ -163,15 +153,15 @@ export function validateCurriculum(curriculumData: Curriculum): string[] {
       if (lesson.status === 'ready' && requiredActivities === 0) {
         issues.push(`Ready lesson ${lesson.id} needs at least one required activity.`)
       }
-      if (lessonIndex > 0 && module.lessons[lessonIndex - 1].order >= lesson.order) {
-        issues.push(`Lessons in ${module.id} must have increasing order values.`)
+      if (lessonIndex > 0 && stage.lessons[lessonIndex - 1].order >= lesson.order) {
+        issues.push(`Lessons in ${stage.id} must have increasing order values.`)
       }
     }
   }
 
-  for (let index = 1; index < curriculumData.modules.length; index += 1) {
-    if (curriculumData.modules[index - 1].order >= curriculumData.modules[index].order) {
-      issues.push('Modules must be listed in increasing order.')
+  for (let index = 1; index < curriculumData.stages.length; index += 1) {
+    if (curriculumData.stages[index - 1].order >= curriculumData.stages[index].order) {
+      issues.push('Stages must be listed in increasing order.')
     }
   }
 
@@ -183,7 +173,7 @@ export function assertValidCurriculum(curriculumData: Curriculum): void {
   if (issues.length > 0) throw new Error(`Invalid curriculum:\n${issues.join('\n')}`)
 }
 
-export interface ModuleProgress {
+export interface StageProgress {
   completedCount: number
   availableCount: number
   totalCount: number
@@ -191,14 +181,14 @@ export interface ModuleProgress {
   isComplete: boolean
 }
 
-export function getModuleProgress(module: Module, completedLessonIds: string[]): ModuleProgress {
-  const availableLessons = module.lessons.filter((lesson) => lesson.status === 'ready')
+export function getStageProgress(stage: Stage, completedLessonIds: string[]): StageProgress {
+  const availableLessons = stage.lessons.filter((lesson) => lesson.status === 'ready')
   const completedCount = availableLessons.filter((lesson) => completedLessonIds.includes(lesson.id)).length
   return {
     completedCount,
     availableCount: availableLessons.length,
-    totalCount: module.lessons.length,
-    upcomingCount: module.lessons.length - availableLessons.length,
+    totalCount: stage.lessons.length,
+    upcomingCount: stage.lessons.length - availableLessons.length,
     isComplete: availableLessons.length > 0 && completedCount === availableLessons.length,
   }
 }

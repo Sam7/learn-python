@@ -6,7 +6,7 @@ import {
   getFirstReadyLesson,
   getLessonById,
   getLessonLocation,
-  getNextLesson,
+  getNextCurriculumLesson,
   getRequiredActivityIds,
   getStepById,
   isLessonComplete,
@@ -42,7 +42,7 @@ export function useLearningSession() {
 
   const activeLesson = getLessonById(progress.currentLessonId) ?? getFirstReadyLesson() ?? allLessons[0]
   const activeLocation = getLessonLocation(activeLesson.id)
-  const activeModule = activeLocation?.module ?? curriculum.modules[0]
+  const activeStage = activeLocation?.stage ?? curriculum.stages[0]
   const currentStepId = progress.currentStepByLesson[activeLesson.id] ?? activeLesson.steps[0]?.id ?? ''
   const activeStep = getStepById(activeLesson, currentStepId) ?? activeLesson.steps[0]
   const activity = activeStep?.activity
@@ -55,17 +55,18 @@ export function useLearningSession() {
   const completedActivityIds = progress.completedActivityIds
   const completedLessonIds = useMemo(() => getCompletedLessonIds(completedActivityIds), [completedActivityIds])
   const currentStepProgress = getStepProgress(activeLesson, currentStepId, completedActivityIds)
-  const nextLesson = getNextLesson(activeLesson.id)
-  const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
-  const nextModule = nextLessonLocation?.module
+  const nextCurriculumLesson = getNextCurriculumLesson(activeLesson.id)
+  const nextStage = nextCurriculumLesson ? getLessonLocation(nextCurriculumLesson.id)?.stage : undefined
   const isBusy = runningActivityId !== null
   const isWaitingForInput = pendingInput?.activityId === activity?.id
   const canAdvance = currentStepProgress.canAdvance && !isBusy
   const nextLabel = currentStepProgress.nextStep
     ? 'Next step'
-    : nextLesson
-      ? nextModule?.id !== activeModule.id ? 'Next chapter' : 'Next lesson'
-      : 'Course complete'
+    : nextCurriculumLesson?.status === 'ready'
+      ? nextStage?.id !== activeStage.id ? 'Next stage' : 'Next lesson'
+      : nextCurriculumLesson
+        ? nextStage?.id !== activeStage.id ? 'Next stage coming soon' : 'Next lesson coming soon'
+        : 'Course complete'
   const feedback = savedFeedback ?? (activity && completedActivityIds.includes(activity.id)
     ? { passed: true, message: 'This task is complete. You can revisit it any time.' }
     : null)
@@ -304,9 +305,9 @@ export function useLearningSession() {
   const currentActivityCompleted = activity ? completedActivityIds.includes(activity.id) : false
   const hintsRevealed = activity ? activityState?.hintsRevealed ?? 0 : 0
   const isLessonDone = isLessonComplete(activeLesson, completedActivityIds)
-  const moduleProgress = {
-    completedCount: completedLessonIds.filter((id) => activeModule.lessons.some((lesson) => lesson.id === id)).length,
-    availableCount: activeModule.lessons.filter((lesson) => lesson.status === 'ready').length,
+  const stageProgress = {
+    completedCount: completedLessonIds.filter((id) => activeStage.lessons.some((lesson) => lesson.id === id)).length,
+    availableCount: activeStage.lessons.filter((lesson) => lesson.status === 'ready').length,
   }
   const advanceState = getAdvanceTarget(activeLesson, currentStepId, completedActivityIds)
   const previousStep = getPreviousStep(activeLesson, currentStepId)
@@ -314,7 +315,7 @@ export function useLearningSession() {
   return {
     curriculum,
     activeLesson,
-    activeModule,
+    activeStage,
     activeStep,
     activity,
     activityProgress: activityState,
@@ -348,9 +349,7 @@ export function useLearningSession() {
     canGoPrevious: Boolean(previousStep) && !isBusy,
     canGoNext: canAdvance && advanceState.kind !== 'course-complete',
     nextLabel,
-    nextLessonTitle: nextLesson?.title,
-    nextModuleTitle: nextModule?.title,
-    moduleProgress,
+    stageProgress,
     hintsRevealed,
     goNext,
     goPrevious,

@@ -5,17 +5,18 @@ import {
   getCompletedLessonIds,
   getLessonById,
   getLessonLocation,
-  getModuleProgress,
+  getNextCurriculumLesson,
   getNextLesson,
   getRequiredActivityIds,
+  getStageProgress,
   orderCurriculum,
   readyLessons,
   validateCurriculum,
 } from '../../curriculum/curriculum'
-import type { LearningActivity } from '../../curriculum/types'
+import type { CodeActivity, LearningActivity } from '../../curriculum/types'
 import type { PythonRunResult } from '../python/python-runner/types'
+import { getAdvanceTarget, getStepProgress } from '../learning/domain/progression'
 import { assessActivity } from './validators/activity-validator'
-import { canOpenLesson, getAdvanceTarget, getStepProgress } from '../learning/domain/progression'
 
 const success = (
   stdout: string,
@@ -25,198 +26,267 @@ const success = (
 
 const noRun = async () => success('')
 
-describe('curriculum integrity and progression', () => {
-  it('has unique, ordered modules and lessons and retrieves lessons by stable id', () => {
+describe('the canonical curriculum outline', () => {
+  it('matches all twelve ordered stages and all 109 micro-lessons from the curriculum specification', () => {
     expect(validateCurriculum(curriculum)).toEqual([])
-    expect(curriculum.modules.map((module) => module.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-    expect(readyLessons.map((lesson) => lesson.id)).toEqual([
-      'saying-something',
-      'your-own-text',
-      'numbers-and-maths',
-      'variables',
-      'values-in-sentences',
-      'ask-a-question',
-      'ask-more-than-one-question',
-      'reuse-an-answer',
-      'get-to-know-you',
+    expect(curriculum.stages.map((stage) => stage.order)).toEqual(Array.from({ length: 12 }, (_, index) => index))
+    expect(curriculum.stages.map((stage) => stage.title)).toEqual([
+      'The Computer Follows Instructions',
+      'Values and Expressions',
+      'Names, State, and Input',
+      'Decisions',
+      'Repetition and Time',
+      'Collections',
+      'Functions and Abstraction',
+      'Reusable Algorithmic Patterns',
+      'Representing Information',
+      'Debugging and Correctness',
+      'Designing Programs',
+      'Connecting Programming to the Real World',
     ])
-    expect(getLessonById('your-own-text')?.order).toBe(2)
-    expect(getLessonLocation('numbers-and-maths')?.module.id).toBe('fundamentals')
-    expect(getNextLesson('saying-something')?.id).toBe('your-own-text')
-    expect(getNextLesson('get-to-know-you')).toBeUndefined()
-    expect(allLessons.find((lesson) => lesson.id === 'text-or-number')?.status).toBe('coming-soon')
+    expect(curriculum.stages.map((stage) => stage.lessons.length)).toEqual([6, 8, 10, 10, 10, 9, 10, 10, 8, 10, 10, 8])
+    expect(allLessons).toHaveLength(109)
   })
 
-  it('derives navigation order from curriculum order values, not file placement', () => {
+  it('publishes only the fully authored Stage 0 lessons and leaves the rest as ordered future curriculum data', () => {
+    expect(readyLessons.map((lesson) => lesson.title)).toEqual([
+      'Make something happen',
+      'Instructions happen in order',
+      'One change → one consequence',
+      'Computers are extremely literal',
+      'Trace the execution pointer',
+      'First tiny creation',
+    ])
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(103)
+    expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
+    expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
+    expect(getNextCurriculumLesson('first-tiny-creation')?.status).toBe('coming-soon')
+    expect(getNextLesson('first-tiny-creation')).toBeUndefined()
+  })
+
+  it('derives navigation and ordering from stage and lesson order values', () => {
     const source = structuredClone(curriculum)
-    source.modules.reverse()
-    source.modules.find((module) => module.id === 'fundamentals')!.lessons.reverse()
+    source.stages.reverse()
+    source.stages.find((stage) => stage.id === 'stage-0')!.lessons.reverse()
     const ordered = orderCurriculum(source)
-    expect(ordered.modules.map((module) => module.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-    expect(ordered.modules[0].lessons.map((lesson) => lesson.order)).toEqual([1, 2, 3, 4, 5])
+    expect(ordered.stages.map((stage) => stage.order)).toEqual(Array.from({ length: 12 }, (_, index) => index))
+    expect(ordered.stages[0].lessons.map((lesson) => lesson.order)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(ordered.stages[0].lessons[0].id).toBe('saying-something')
   })
 
-  it('rejects a published lesson without a required activity', () => {
+  it('rejects invalid stage numbering and ready lessons without required activities', () => {
     const broken = structuredClone(curriculum)
-    broken.modules[0].lessons[0].steps[0].activity!.required = false
+    broken.stages[1].order = 0
+    broken.stages[0].lessons[0].steps[0].activity!.required = false
+    expect(validateCurriculum(broken)).toContain('Duplicate stage order: 0.')
     expect(validateCurriculum(broken)).toContain('Ready lesson saying-something needs at least one required activity.')
   })
 
-  it('derives lesson completion and module progress from required activity ids', () => {
-    const hello = getLessonById('saying-something')!
-    const firstTaskId = getRequiredActivityIds(hello)[0]
-    expect(getCompletedLessonIds([firstTaskId])).toContain(hello.id)
-    expect(getModuleProgress(curriculum.modules[0], [hello.id])).toMatchObject({
+  it('derives stage completion and progression from required activity ids', () => {
+    const stage = curriculum.stages[0]
+    const firstLesson = stage.lessons[0]
+    const [firstActivityId] = getRequiredActivityIds(firstLesson)
+    expect(getCompletedLessonIds([firstActivityId])).toContain(firstLesson.id)
+    expect(getStageProgress(stage, [firstLesson.id])).toMatchObject({
       completedCount: 1,
-      availableCount: 5,
+      availableCount: 6,
+      totalCount: 6,
       isComplete: false,
     })
   })
 
-  it('requires both math activities, in order, before leaving the lesson', () => {
-    const lesson = getLessonById('numbers-and-maths')!
-    const [predictionStep, codeStep] = lesson.steps
+  it('requires every task in a multi-activity lesson before moving to its next lesson', () => {
+    const lesson = getLessonById('instructions-in-order')!
+    const [predictionStep, arrangeStep] = lesson.steps
     const predictionId = predictionStep.activity!.id
-    const codeId = codeStep.activity!.id
+    const arrangeId = arrangeStep.activity!.id
 
     expect(getStepProgress(lesson, predictionStep.id, []).canAdvance).toBe(false)
-    expect(getAdvanceTarget(lesson, predictionStep.id, []).kind).toBe('blocked')
-    expect(getAdvanceTarget(lesson, predictionStep.id, [predictionId])).toEqual({ kind: 'step', step: codeStep })
-    expect(getAdvanceTarget(lesson, codeStep.id, [predictionId]).kind).toBe('blocked')
-    expect(getAdvanceTarget(lesson, codeStep.id, [predictionId, codeId]).kind).toEqual('lesson')
-  })
-
-  it('unlocks only the next lesson after all required work is complete', () => {
-    const first = getLessonById('saying-something')!
-    const next = getLessonById('your-own-text')!
-    expect(canOpenLesson(next, allLessons, [])).toBe(false)
-    expect(canOpenLesson(next, allLessons, getRequiredActivityIds(first))).toBe(true)
-  })
-
-  it('does not gate navigation on an optional activity', () => {
-    const lesson = getLessonById('saying-something')!
-    const step = lesson.steps[0]
-    const activity = { ...step.activity!, required: false } as LearningActivity
-    const optionalLesson = {
-      ...lesson,
-      steps: [
-        { ...step, activity },
-        { id: 'continue-reading', content: [{ type: 'paragraph' as const, text: 'Continue.' }] },
-      ],
-    }
-    expect(getStepProgress(optionalLesson, step.id, []).canAdvance).toBe(true)
+    expect(getAdvanceTarget(lesson, predictionStep.id, [predictionId])).toEqual({ kind: 'step', step: arrangeStep })
+    expect(getStepProgress(lesson, arrangeStep.id, [predictionId]).canAdvance).toBe(false)
+    expect(getAdvanceTarget(lesson, arrangeStep.id, [predictionId, arrangeId]).kind).toBe('lesson')
   })
 })
 
-describe('activity assessors', () => {
-  it('accepts different code that has the expected output', async () => {
+describe('Stage 0 activity assessment', () => {
+  it('accepts learner-created output instead of requiring one exact source or answer', async () => {
     const activity = getLessonById('saying-something')!.steps[0].activity!
     const result = await assessActivity(activity, {
-      code: 'message = "Hello Python!"\nprint(message)',
-      execution: success('Hello Python!\n'),
+      code: 'print("Good morning!")',
+      execution: success('Good morning!\n'),
       runPython: noRun,
     })
     expect(result.passed).toBe(true)
   })
 
-  it('reports actual and expected evidence after a successful but incorrect run', async () => {
-    const activity = getLessonById('saying-something')!.steps[0].activity!
+  it('reports output evidence when a learner prediction does not match real Python', async () => {
+    const activity = getLessonById('instructions-in-order')!.steps[0].activity!
+    expect(activity.kind).toBe('predict-output')
+    if (activity.kind !== 'predict-output') throw new Error('Expected a prediction activity')
     const result = await assessActivity(activity, {
-      code: 'print("hello")', execution: success('hello\n'), runPython: noRun,
+      response: 'Third\nSecond\nFirst',
+      execution: success('First\nSecond\nThird\n'),
+      runPython: noRun,
     })
     expect(result.passed).toBe(false)
-    expect(result.evidence).toEqual({ expected: 'Hello Python!', actual: 'hello' })
+    expect(result.evidence).toEqual({ expected: 'First\nSecond\nThird', actual: 'Third\nSecond\nFirst' })
   })
 
-  it('assesses text variables with Python AST rather than source matching', async () => {
-    const activity = getLessonById('variables')!.steps.find((step) => step.activity?.id === 'create-a-text-variable')!.activity!
-    let inspectedCode = ''
+  it('checks line ordering as data and rejects malformed ordering definitions', async () => {
+    const activity = getLessonById('instructions-in-order')!.steps[1].activity!
+    expect(activity.kind).toBe('arrange-code')
+    if (activity.kind !== 'arrange-code') throw new Error('Expected an arrange-code activity')
+    expect((await assessActivity(activity, {
+      response: activity.correctOrder,
+      execution: success(''),
+      runPython: noRun,
+    })).passed).toBe(true)
+    expect((await assessActivity(activity, {
+      response: ['first', 'first', 'third'],
+      execution: success(''),
+      runPython: noRun,
+    })).passed).toBe(false)
+  })
+
+  it('requires an observable experiment but accepts duplicate, deleted, reordered, and changed output', async () => {
+    const activity = getLessonById('one-change-one-consequence')!.steps[0].activity!
+    expect((await assessActivity(activity, {
+      code: 'print("Ready")\nprint("Go!")',
+      execution: success('Ready\nGo!\n'),
+      runPython: noRun,
+    })).passed).toBe(false)
+    expect((await assessActivity(activity, {
+      code: 'print("Ready")\nprint("Go!")\nprint("Go!")',
+      execution: success('Ready\nGo!\nGo!\n'),
+      runPython: noRun,
+    })).passed).toBe(true)
+    expect((await assessActivity(activity, {
+      code: 'print("Go!")\nprint("Ready")',
+      execution: success('Go!\nReady\n'),
+      runPython: noRun,
+    })).passed).toBe(true)
+  })
+
+  it('shows syntax errors as repair clues and passes once the learner fixes the code', async () => {
+    const activity = getLessonById('computers-are-literal')!.steps[0].activity!
+    const failed = await assessActivity(activity, {
+      code: 'print("Hello)',
+      execution: { ...success(''), status: 'error', error: 'SyntaxError: unterminated string literal' },
+      runPython: noRun,
+    })
+    expect(failed.passed).toBe(false)
+    expect(failed.message).toContain('Take a look at the error below')
+    expect((await assessActivity(activity, {
+      code: 'print("Hello")',
+      execution: success('Hello\n'),
+      runPython: noRun,
+    })).passed).toBe(true)
+  })
+
+  it('treats blank rows as real output lines for the exact-three-line creation task', async () => {
+    const activity = getLessonById('first-tiny-creation')!.steps[0].activity!
+    expect((await assessActivity(activity, {
+      code: 'print("A")\nprint()\nprint("C")',
+      execution: success('A\n\nC\n'),
+      runPython: noRun,
+    })).passed).toBe(true)
+    const tooShort = await assessActivity(activity, {
+      code: 'print("A")\nprint("B")',
+      execution: success('A\nB\n'),
+      runPython: noRun,
+    })
+    expect(tooShort.passed).toBe(false)
+    expect(tooShort.evidence?.expected).toBe('3 output lines')
+  })
+
+  it('uses the real worker trace contract for step-through activities', async () => {
+    const activity = getLessonById('trace-the-execution-pointer')!.steps[0].activity!
     const result = await assessActivity(activity, {
-      code: 'favourite_food = "noodles"\nprint(favourite_food)',
-      execution: success('noodles\n'),
-      runPython: async (request) => { inspectedCode = request.code; return success('') },
+      execution: success('A\nB\nC\n', [], [
+        { line: 1, event: 'line', locals: {} },
+        { line: 2, event: 'line', locals: {} },
+        { line: 3, event: 'line', locals: {} },
+      ]),
+      runPython: noRun,
     })
     expect(result.passed).toBe(true)
-    expect(inspectedCode).toContain('ast.parse')
   })
 
-  it('checks input behavior with several unseen answers, independent of prompts and variable names', async () => {
-    const activity = getLessonById('ask-more-than-one-question')!.steps[0].activity!
+  it('supports behavior checks for multiple unseen input combinations', async () => {
+    const activity: CodeActivity = {
+      id: 'two-input-greeting',
+      kind: 'code',
+      title: 'Use two answers',
+      prompt: 'Ask and use two answers.',
+      required: true,
+      starterCode: 'name = input()\nfood = input()\nprint(name, food)',
+      assessment: {
+        kind: 'behavior',
+        cases: [
+          { inputs: ['Ada', 'noodles'], requiredInputs: [{ inputIndex: 0 }, { inputIndex: 1 }] },
+          { inputs: ['Grace', 'apples'], requiredInputs: [{ inputIndex: 0 }, { inputIndex: 1 }] },
+        ],
+      },
+    }
     const result = await assessActivity(activity, {
-      code: 'first = input("Tell me something: ")\nsecond = input("Another thing: ")\nprint(first, second)',
-      execution: success('one two\n'),
-      runPython: async (request) => {
-        const inputs = request.input?.lines ?? []
-        return success(inputs.join(' '), inputs.map((answer, inputIndex) => ({ inputIndex, prompt: '', answer })))
+      code: activity.starterCode,
+      execution: success('Ada noodles\n'),
+      runPython: async ({ input }) => {
+        const lines = input?.lines ?? []
+        return success(`${lines.join(' ')}\n`, lines.map((answer, inputIndex) => ({ inputIndex, prompt: '', answer })))
       },
     })
     expect(result.passed).toBe(true)
   })
 
-  it('does not accept code that skips a required input answer', async () => {
-    const activity = getLessonById('ask-more-than-one-question')!.steps[0].activity!
+  it('does not accept a program that skips one of the required answers', async () => {
+    const activity: CodeActivity = {
+      id: 'two-input-required',
+      kind: 'code',
+      title: 'Use two answers',
+      prompt: 'Ask two questions.',
+      required: true,
+      starterCode: 'answer = input()\nprint(answer)',
+      assessment: {
+        kind: 'behavior',
+        cases: [{ inputs: ['one', 'two'], requiredInputs: [{ inputIndex: 0 }, { inputIndex: 1 }] }],
+      },
+    }
     const result = await assessActivity(activity, {
-      code: 'answer = input("Tell me something: ")\nprint(answer)',
+      code: activity.starterCode,
       execution: success('one\n'),
-      runPython: async (request) => success(
-        request.input?.lines?.[0] ?? '',
-        [{ inputIndex: 0, prompt: '', answer: request.input?.lines?.[0] ?? '' }],
+      runPython: async ({ input }) => success(
+        input?.lines?.[0] ?? '',
+        [{ inputIndex: 0, prompt: '', answer: input?.lines?.[0] ?? '' }],
       ),
     })
     expect(result.passed).toBe(false)
+    expect(result.message).toContain('Ask for all 2 answers')
   })
 
-  it('compares a prediction with the real Python result', async () => {
-    const activity = getLessonById('numbers-and-maths')!.steps[0].activity!
-    expect(activity.kind).toBe('predict-output')
-    if (activity.kind !== 'predict-output') throw new Error('Expected prediction activity')
-    const result = await assessActivity(activity, {
-      response: '5', execution: success('5\n'), runPython: noRun,
-    })
-    expect(result.passed).toBe(true)
-    const wrong = await assessActivity(activity, {
-      response: '6', execution: success('5\n'), runPython: noRun,
-    })
-    expect(wrong.passed).toBe(false)
-  })
-
-  it('uses traced local values to check a state prediction', async () => {
+  it('checks state predictions from captured Python frames, not a TypeScript simulation', async () => {
     const activity: LearningActivity = {
-      id: 'predict-total', kind: 'predict-state', title: 'Predict the total', prompt: 'What is total after line 1?',
-      required: true, code: 'total = 4\nprint(total)', line: 1, variable: 'total', expectedValue: '4', choices: ['3', '4', '5'],
+      id: 'predict-score', kind: 'predict-state', title: 'Follow score', prompt: 'What is score?',
+      required: true, code: 'score = 10\nscore = 20\nprint(score)', line: 2, variable: 'score', expectedValue: '20', choices: ['10', '20', '30'],
     }
     const result = await assessActivity(activity, {
-      response: '4',
-      execution: success('', [], [
+      response: '20',
+      execution: success('20\n', [], [
         { line: 1, event: 'line', locals: {} },
-        { line: 2, event: 'line', locals: { total: 4 } },
+        { line: 2, event: 'line', locals: { score: 10 } },
+        { line: 3, event: 'line', locals: { score: 20 } },
       ]),
       runPython: noRun,
     })
     expect(result.passed).toBe(true)
-    const inconsistent = await assessActivity({ ...activity, expectedValue: '5' }, {
-      response: '4',
-      execution: success('', [], [
-        { line: 1, event: 'line', locals: {} },
-        { line: 2, event: 'line', locals: { total: 4 } },
-      ]),
-      runPython: noRun,
-    })
-    expect(inconsistent.passed).toBe(false)
-    expect(inconsistent.message).toContain('content review')
   })
 
-  it('checks choices and accessible code ordering deterministically', async () => {
-    const choice: LearningActivity = {
-      id: 'why', kind: 'choice', title: 'Why?', prompt: 'Pick one.', required: true,
-      options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'b',
+  it('passes only the correct choice in a deterministic question', async () => {
+    const activity: LearningActivity = {
+      id: 'sequence-question', kind: 'choice', title: 'Sequence', prompt: 'What comes first?', required: true,
+      options: [{ id: 'last', text: 'The last line' }, { id: 'first', text: 'The first line' }], correctOptionId: 'first',
     }
-    const ordered: LearningActivity = {
-      id: 'order', kind: 'arrange-code', title: 'Order it', prompt: 'Put these lines in order.', required: true,
-      fragments: [{ id: 'print', code: 'print(name)' }, { id: 'assign', code: 'name = "Ada"' }],
-      startingOrder: ['print', 'assign'], correctOrder: ['assign', 'print'],
-    }
-    expect((await assessActivity(choice, { response: 'b', execution: success(''), runPython: noRun })).passed).toBe(true)
-    expect((await assessActivity(ordered, { response: ['assign', 'print'], execution: success(''), runPython: noRun })).passed).toBe(true)
+    expect((await assessActivity(activity, { response: 'first', execution: success(''), runPython: noRun })).passed).toBe(true)
+    expect((await assessActivity(activity, { response: 'last', execution: success(''), runPython: noRun })).passed).toBe(false)
   })
 })

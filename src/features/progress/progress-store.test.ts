@@ -37,23 +37,25 @@ describe('progress persistence', () => {
       .toBe(readyLessons[0].id)
   })
 
-  it('migrates version 1 lesson completion and saved code into activity progress', () => {
+  it('preserves compatible version 1 progress and filters lessons removed from the new curriculum', () => {
     const first = getLessonById('saying-something')!
     const firstActivity = first.steps[0].activity!
     const migrated = normalizeProgress({
       version: 1,
-      currentLessonId: 'your-own-text',
-      completedLessonIds: ['saying-something', 'not-in-curriculum'],
+      currentLessonId: 'saying-something',
+      completedLessonIds: ['saying-something', 'your-own-text', 'not-in-curriculum'],
       lessonCode: {
+        'saying-something': 'print("Hello Python!")',
         'your-own-text': 'print("My name is Sam")\nprint("I like tea")',
         'not-in-curriculum': 'print("ignore")',
       },
     }, allLessons)
 
-    expect(migrated.currentLessonId).toBe('your-own-text')
+    expect(migrated.currentLessonId).toBe('saying-something')
     expect(migrated.completedActivityIds).toContain(firstActivity.id)
-    expect(migrated.activityProgress['write-your-own-lines']?.code).toBe('print("My name is Sam")\nprint("I like tea")')
-    expect(migrated.currentStepByLesson['your-own-text']).toBe('print-two-lines')
+    expect(migrated.completedActivityIds).not.toContain('write-your-own-lines')
+    expect(migrated.activityProgress[firstActivity.id]?.code).toBe('print("Hello Python!")')
+    expect(migrated.currentStepByLesson['saying-something']).toBe('make-python-speak')
   })
 
   it('keeps only valid activities, steps, responses, and completion IDs', () => {
@@ -92,7 +94,7 @@ describe('progress persistence', () => {
   it('does not restore a ready lesson whose prerequisite is still locked', () => {
     const progress = normalizeProgress({
       version: PROGRESS_VERSION,
-      currentLessonId: 'variables',
+      currentLessonId: 'instructions-in-order',
       completedActivityIds: [],
       activityProgress: {},
     }, allLessons)

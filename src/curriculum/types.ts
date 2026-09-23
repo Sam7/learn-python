@@ -30,7 +30,7 @@ export interface BehaviorTestCase {
 }
 
 export type CodeAssessment =
-  | { kind: 'output'; expectation: OutputExpectation; reject?: string[] }
+  | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'behavior'; cases: BehaviorTestCase[] }
   | { kind: 'ast'; requirement: 'text-variable' | 'variable-in-sentence'; rejectOutput?: string[] }
 
@@ -115,7 +115,7 @@ export interface Lesson {
   status: LessonStatus
 }
 
-export interface Module {
+export interface Stage {
   id: string
   order: number
   title: string
@@ -125,7 +125,7 @@ export interface Module {
 
 export interface Curriculum {
   title: string
-  modules: Module[]
+  stages: Stage[]
 }
 
 export interface ValidationResult {

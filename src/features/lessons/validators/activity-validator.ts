@@ -37,15 +37,21 @@ function expectationMatches(expectation: OutputExpectation, stdout: string): boo
   const output = normalizedOutput(stdout)
   if (expectation.mode === 'exact') return output === expectation.lines.join('\n')
   if (expectation.mode === 'contains') return expectation.values.every((value) => output.includes(value))
-  const lines = output.split('\n').filter((line) => line.trim().length > 0)
+  const lines = outputLines(stdout)
   if (expectation.mode === 'line-count') return lines.length === expectation.count
-  return lines.length > 0
+  return lines.some((line) => line.trim().length > 0)
+}
+
+function outputLines(stdout: string): string[] {
+  const output = stdout.replace(/\r\n/g, '\n')
+  if (output.length === 0) return []
+  return (output.endsWith('\n') ? output.slice(0, -1) : output).split('\n')
 }
 
 function expectationDescription(expectation: OutputExpectation): string {
   if (expectation.mode === 'exact') return expectation.lines.join('\n')
   if (expectation.mode === 'contains') return `Output includes: ${expectation.values.join(', ')}`
-  if (expectation.mode === 'line-count') return `${expectation.count} non-empty line${expectation.count === 1 ? '' : 's'}`
+  if (expectation.mode === 'line-count') return `${expectation.count} output line${expectation.count === 1 ? '' : 's'}`
   return 'some non-empty output'
 }
 
@@ -62,7 +68,7 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
   const assessment = activity.assessment
   if (assessment.kind !== 'output') return { passed: false, message: 'This code task needs a different assessment.' }
   const output = normalizedOutput(stdout)
-  if (assessment.reject?.some((rejected) => output.includes(rejected))) {
+  if (assessment.rejectExact?.some((rejected) => output === rejected)) {
     return { passed: false, message: 'That is still the example answer. Change it to make it your own.' }
   }
   return expectationMatches(assessment.expectation, stdout)

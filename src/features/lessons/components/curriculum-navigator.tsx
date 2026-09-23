@@ -5,9 +5,9 @@ import { cn } from '../../../lib/utils'
 import {
   getLessonLocation,
   getPreviousLesson,
-  getModuleProgress,
+  getStageProgress,
 } from '../../../curriculum/curriculum'
-import type { Curriculum, Lesson, Module } from '../../../curriculum/types'
+import type { Curriculum, Lesson, Stage } from '../../../curriculum/types'
 
 interface CurriculumNavigatorProps {
   curriculum: Curriculum
@@ -22,8 +22,8 @@ function lessonIsOpen(lesson: Lesson, completedLessonIds: string[]) {
   return !previous || completedLessonIds.includes(previous.id)
 }
 
-interface ModuleSectionProps {
-  module: Module
+interface StageSectionProps {
+  stage: Stage
   currentLessonId: string
   completedLessonIds: string[]
   isExpanded: boolean
@@ -32,26 +32,26 @@ interface ModuleSectionProps {
   onNavigate?: () => void
 }
 
-function ModuleSection({
-  module,
+function StageSection({
+  stage,
   currentLessonId,
   completedLessonIds,
   isExpanded,
   onSelect,
   onToggle,
   onNavigate,
-}: ModuleSectionProps) {
-  const progress = getModuleProgress(module, completedLessonIds)
-  const isCurrentModule = module.lessons.some((lesson) => lesson.id === currentLessonId)
-  const lessonsId = `module-lessons-${module.id}`
+}: StageSectionProps) {
+  const progress = getStageProgress(stage, completedLessonIds)
+  const isCurrentStage = stage.lessons.some((lesson) => lesson.id === currentLessonId)
+  const lessonsId = `stage-lessons-${stage.id}`
 
   return (
-    <section className={cn('rounded-2xl', isCurrentModule && 'bg-mist/65 p-2')} aria-labelledby={`module-${module.id}`}>
+    <section className={cn('rounded-2xl', isCurrentStage && 'bg-mist/65 p-2')} aria-labelledby={`stage-${stage.id}`}>
       <button
         type="button"
         className={cn(
           'flex w-full items-start gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2',
-          isCurrentModule ? 'px-2 pb-2' : 'px-2 py-2',
+          isCurrentStage ? 'px-2 pb-2' : 'px-2 py-2',
         )}
         aria-expanded={isExpanded}
         aria-controls={lessonsId}
@@ -59,15 +59,15 @@ function ModuleSection({
       >
         <span className={cn(
           'flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold',
-          isCurrentModule ? 'bg-teal text-white' : 'bg-white text-muted ring-1 ring-line',
+          isCurrentStage ? 'bg-teal text-white' : 'bg-white text-muted ring-1 ring-line',
         )} aria-hidden="true">
-          {String(module.order).padStart(2, '0')}
+          {stage.order}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-start justify-between gap-2">
-            <span id={`module-${module.id}`} className="text-sm font-bold leading-5 text-ink">{module.title}</span>
+            <span id={`stage-${stage.id}`} className="text-sm font-bold leading-5 text-ink">{stage.title}</span>
             <span className="flex shrink-0 items-center gap-1.5">
-              {progress.isComplete ? <Check size={15} className="mt-0.5 text-teal" aria-label="Module complete" /> : null}
+              {progress.isComplete ? <Check size={15} className="mt-0.5 text-teal" aria-label="Stage complete" /> : null}
               <ChevronDown
                 size={15}
                 className={cn('mt-0.5 text-muted transition-transform', !isExpanded && '-rotate-90')}
@@ -82,8 +82,8 @@ function ModuleSection({
       </button>
 
       {isExpanded ? (
-        <div id={lessonsId} className="space-y-1" role="group" aria-label={`${module.title} lessons`}>
-          {module.lessons.map((lesson) => {
+        <div id={lessonsId} className="space-y-1" role="group" aria-label={`${stage.title} lessons`}>
+          {stage.lessons.map((lesson) => {
             const isCompleted = completedLessonIds.includes(lesson.id)
             const isCurrent = currentLessonId === lesson.id
             const isOpen = lessonIsOpen(lesson, completedLessonIds)
@@ -123,7 +123,7 @@ function ModuleSection({
           })}
         </div>
       ) : (
-        <p className="px-2 pb-2 pl-[3.25rem] text-xs leading-5 text-muted">{module.description}</p>
+        <p className="px-2 pb-2 pl-[3.25rem] text-xs leading-5 text-muted">{stage.description}</p>
       )}
     </section>
   )
@@ -131,8 +131,8 @@ function ModuleSection({
 
 interface NavigatorContentProps extends Omit<CurriculumNavigatorProps, 'curriculum'> {
   curriculum: Curriculum
-  expandedModuleIds: Set<string>
-  onToggleModule: (moduleId: string) => void
+  expandedStageIds: Set<string>
+  onToggleStage: (stageId: string) => void
   onNavigate?: () => void
 }
 
@@ -140,22 +140,22 @@ function NavigatorContent({
   curriculum,
   currentLessonId,
   completedLessonIds,
-  expandedModuleIds,
-  onToggleModule,
+  expandedStageIds,
+  onToggleStage,
   onSelect,
   onNavigate,
 }: NavigatorContentProps) {
   return (
     <div className="space-y-2">
-      {curriculum.modules.map((module) => (
-        <ModuleSection
-          key={module.id}
-          module={module}
+      {curriculum.stages.map((stage) => (
+        <StageSection
+          key={stage.id}
+          stage={stage}
           currentLessonId={currentLessonId}
           completedLessonIds={completedLessonIds}
-          isExpanded={expandedModuleIds.has(module.id)}
+          isExpanded={expandedStageIds.has(stage.id)}
           onSelect={onSelect}
-          onToggle={() => onToggleModule(module.id)}
+          onToggle={() => onToggleStage(stage.id)}
           onNavigate={onNavigate}
         />
       ))}
@@ -167,18 +167,18 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
   const [isOpen, setIsOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const location = getLessonLocation(currentLessonId)
-  const currentModule = location?.module ?? curriculum.modules[0]
-  const currentLesson = location?.lesson ?? currentModule.lessons[0]
-  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(currentModule.id)
+  const currentStage = location?.stage ?? curriculum.stages[0]
+  const currentLesson = location?.lesson ?? currentStage.lessons[0]
+  const [expandedStageId, setExpandedStageId] = useState<string | null>(currentStage.id)
 
-  const isModuleExpanded = (module: Module) => expandedModuleId === module.id
+  const isStageExpanded = (stage: Stage) => expandedStageId === stage.id
 
-  const expandedModuleIds = new Set(
-    curriculum.modules.filter(isModuleExpanded).map((module) => module.id),
+  const expandedStageIds = new Set(
+    curriculum.stages.filter(isStageExpanded).map((stage) => stage.id),
   )
 
-  const toggleModule = (moduleId: string) => {
-    setExpandedModuleId((current) => current === moduleId ? null : moduleId)
+  const toggleStage = (stageId: string) => {
+    setExpandedStageId((current) => current === stageId ? null : stageId)
   }
 
   useEffect(() => {
@@ -234,8 +234,8 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
               curriculum={curriculum}
               currentLessonId={currentLessonId}
               completedLessonIds={completedLessonIds}
-              expandedModuleIds={expandedModuleIds}
-              onToggleModule={toggleModule}
+              expandedStageIds={expandedStageIds}
+              onToggleStage={toggleStage}
               onSelect={onSelect}
             />
           </>
@@ -253,9 +253,9 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
           onClick={() => setIsOpen(true)}
         >
           <span className="flex min-w-0 items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-teal text-xs font-bold text-white">{currentModule.order}</span>
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-teal text-xs font-bold text-white">{currentStage.order}</span>
             <span className="min-w-0">
-              <span className="block truncate text-xs font-bold uppercase tracking-[0.1em] text-muted">{currentModule.title}</span>
+              <span className="block truncate text-xs font-bold uppercase tracking-[0.1em] text-muted">Stage {currentStage.order} · {currentStage.title}</span>
               <span className="mt-0.5 block truncate text-sm font-semibold text-ink">Lesson {currentLesson.order}: {currentLesson.title}</span>
             </span>
           </span>
@@ -280,8 +280,8 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
               curriculum={curriculum}
               currentLessonId={currentLessonId}
               completedLessonIds={completedLessonIds}
-              expandedModuleIds={expandedModuleIds}
-              onToggleModule={toggleModule}
+              expandedStageIds={expandedStageIds}
+              onToggleStage={toggleStage}
               onSelect={onSelect}
               onNavigate={() => setIsOpen(false)}
             />

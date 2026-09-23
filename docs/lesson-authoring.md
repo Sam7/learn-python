@@ -4,7 +4,7 @@ The curriculum is data; React provides a generic renderer and workflow. A normal
 
 ## Shape and ordering
 
-Curriculum data lives in `src/curriculum/modules/`. `curriculum.ts` orders modules and lessons by their numeric `order` fields, so source-file placement is not the progression contract. Keep order values unique within their level and keep IDs stable after release: completion and saved answers use activity IDs, while the current step is saved by lesson/step ID.
+Curriculum data lives in `src/curriculum/stages/`. `curriculum.ts` orders stages and lessons by their numeric `order` fields, so source-file placement is not the progression contract. Keep order values unique within their level and keep IDs stable after release: completion and saved answers use activity IDs, while the current step is saved by lesson/step ID.
 
 A lesson is a sequence of small steps. Each step has an ordered list of content blocks and at most one activity. This supports an experience such as:
 
@@ -87,7 +87,7 @@ Hints are ordered from a smaller nudge to a more explicit clue. Reveal one at a 
 
 Do not save runtime instances, stdout, or interactive input answers. If changing the progress schema, normalize unknown/corrupt values and add a migration test. V1 lesson completion and saved code currently migrate to the corresponding v2 activities.
 
-An activity may only be marked complete when it is required and its assessment passes. Lesson completion, module progress, unlocks, and previous/next targets derive from the curriculum's required activities. The session restores only an available and unlocked current lesson; future/removed data is filtered safely.
+An activity may only be marked complete when it is required and its assessment passes. Lesson completion, stage progress, unlocks, and previous/next targets derive from the curriculum's required activities. The session restores only an available and unlocked current lesson; future/removed data is filtered safely.
 
 ## Tests and visual review
 

@@ -10,7 +10,7 @@ import './App.css'
 
 function App() {
   const session = useLearningSession()
-  const { activeLesson, activeModule, activeStep, activity } = session
+  const { activeLesson, activeStage, activeStep, activity } = session
   const stepNumber = session.stepIndex + 1
 
   const handleResetProgress = () => {
@@ -34,10 +34,10 @@ function App() {
           <div className="flex items-center gap-3 sm:gap-5">
             <div className="max-w-[12rem] text-right sm:max-w-none">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-muted sm:text-xs sm:tracking-[0.13em]">
-                Module {activeModule.order} · Lesson {activeLesson.order} of {activeModule.lessons.length}
+                Stage {activeStage.order} · Lesson {activeLesson.order} of {activeStage.lessons.length}
               </p>
-              <div className="ml-auto mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${session.moduleProgress.completedCount} of ${session.moduleProgress.availableCount} available lessons complete`}>
-                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${session.moduleProgress.availableCount ? session.moduleProgress.completedCount / session.moduleProgress.availableCount * 100 : 0}%` }} />
+              <div className="ml-auto mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${session.stageProgress.completedCount} of ${session.stageProgress.availableCount} available lessons complete`}>
+                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${session.stageProgress.availableCount ? session.stageProgress.completedCount / session.stageProgress.availableCount * 100 : 0}%` }} />
               </div>
               <p className="mt-1 hidden text-[10px] leading-4 text-muted/60 sm:block">Nothing leaves this browser · progress saved on this device.</p>
             </div>
@@ -50,7 +50,7 @@ function App() {
 
       <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-0 lg:grid-cols-[auto_minmax(0,1fr)]">
         <CurriculumNavigator
-          key={activeModule.id}
+          key={activeStage.id}
           curriculum={session.curriculum}
           currentLessonId={activeLesson.id}
           completedLessonIds={session.completedLessonIds}
