@@ -3,7 +3,7 @@ import { futureLesson } from './future-lesson'
 
 export const loopsModule: Module = {
   id: 'loops',
-  order: 4,
+  order: 5,
   title: 'Repeating things',
   description: 'Repeat useful work without copying code.',
   lessons: [

@@ -3,7 +3,7 @@ import { futureLesson } from './future-lesson'
 
 export const projectsModule: Module = {
   id: 'projects',
-  order: 7,
+  order: 8,
   title: 'Building something',
   description: 'Combine your Python skills in a project.',
   lessons: [

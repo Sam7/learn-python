@@ -4,6 +4,19 @@ function outputLines(stdout: string): string[] {
   return stdout.replace(/\r\n/g, '\n').trimEnd().split('\n').filter((line) => line.length > 0)
 }
 
+function countOccurrences(text: string, value: string): number {
+  if (!value) return 0
+  let count = 0
+  let start = 0
+  while (start <= text.length - value.length) {
+    const index = text.indexOf(value, start)
+    if (index === -1) break
+    count += 1
+    start = index + value.length
+  }
+  return count
+}
+
 function validateOutput(lesson: Lesson, context: LessonValidationContext): ValidationResult {
   const definition = lesson.validation
   if (definition.kind !== 'output') {
@@ -163,10 +176,27 @@ async function validateBehavior(lesson: Lesson, context: LessonValidationContext
     }
 
     const stdout = result.stdout.replace(/\r\n/g, '\n')
-    const usedEveryInput = result.inputTranscript.length >= testCase.inputs.length
-    const printedExpectedOutput = testCase.expectedOutput.every((value) => stdout.includes(value))
-    if (!usedEveryInput || !printedExpectedOutput) {
-      return { passed: false, message: 'Use the answer from input() in what your program prints.' }
+    const defaultInputCount = definition.requirement === 'uses-multiple-inputs' ? 2 : 1
+    const requiredInputs = testCase.requiredInputs ?? Array.from(
+      { length: defaultInputCount },
+      (_, inputIndex) => ({ inputIndex, minimumOccurrences: 1 }),
+    )
+    if (result.inputTranscript.length < requiredInputs.length) {
+      return { passed: false, message: `Ask for all ${requiredInputs.length} answers before checking your program.` }
+    }
+
+    const answersUsed = requiredInputs.every(({ inputIndex, minimumOccurrences = 1 }) => {
+      const answer = testCase.inputs[inputIndex]
+      return typeof answer === 'string' && countOccurrences(stdout, answer) >= minimumOccurrences
+    })
+    const printedExpectedOutput = testCase.expectedOutput?.every((value) => stdout.includes(value)) ?? true
+    if (!answersUsed || !printedExpectedOutput) {
+      return {
+        passed: false,
+        message: definition.requirement === 'reuses-input'
+          ? 'Use the answer more than once in your program.'
+          : 'Use every answer from input() in what your program prints.',
+      }
     }
   }
 

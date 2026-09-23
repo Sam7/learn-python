@@ -67,6 +67,7 @@ function App() {
   const activeLocation = getLessonLocation(activeLesson.id)
   const activeModule = activeLocation?.module ?? curriculum.modules[0]
   const moduleProgress = getModuleProgress(activeModule, progress.completedLessonIds)
+  const nextModule = curriculum.modules.find((module) => module.order > activeModule.order)
   const nextLesson = getNextLesson(activeLesson.id)
   const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
   const nextActionLabel = nextLessonLocation?.module.id !== activeModule.id ? 'Next chapter' : 'Next lesson'
@@ -362,7 +363,11 @@ function App() {
                 {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>{nextActionLabel} <ChevronRight size={18} aria-hidden="true" /></Button> : (
                   <div className="text-left sm:text-right">
                     <p className="text-sm font-semibold text-teal-dark">Chapter complete</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">You finished the available lessons in {activeModule.title}. More lessons are coming soon.</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      {nextModule
+                        ? `You finished the available lessons in ${activeModule.title}. ${nextModule.title} is the next chapter.`
+                        : `You finished the available lessons in ${activeModule.title}. More lessons are coming soon.`}
+                    </p>
                   </div>
                 )}
               </div>

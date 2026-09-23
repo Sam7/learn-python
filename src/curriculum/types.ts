@@ -23,10 +23,14 @@ export type AstValidation = {
 
 export type BehaviorValidation = {
   kind: 'behavior'
-  requirement: 'uses-input'
+  requirement: 'uses-input' | 'uses-multiple-inputs' | 'reuses-input'
   cases: Array<{
     inputs: string[]
-    expectedOutput: string[]
+    expectedOutput?: string[]
+    requiredInputs?: Array<{
+      inputIndex: number
+      minimumOccurrences?: number
+    }>
   }>
 }
 

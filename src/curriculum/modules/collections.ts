@@ -3,7 +3,7 @@ import { futureLesson } from './future-lesson'
 
 export const collectionsModule: Module = {
   id: 'collections',
-  order: 5,
+  order: 6,
   title: 'Working with collections',
   description: 'Keep groups of values together and work with them.',
   lessons: [

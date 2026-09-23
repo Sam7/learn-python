@@ -3,7 +3,7 @@ import { futureLesson } from './future-lesson'
 
 export const decisionsModule: Module = {
   id: 'decisions',
-  order: 3,
+  order: 4,
   title: 'Making decisions',
   description: 'Teach programs to choose what to do.',
   lessons: [

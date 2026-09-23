@@ -85,13 +85,20 @@ test('the available learning path reaches the next chapter', async ({ page, brow
     { code: 'print(12 + 8)', next: 'Remembering things', button: 'Next lesson' },
     { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences', button: 'Next lesson' },
     { code: 'favourite_food = "mango"\nprint("My favourite food is", favourite_food)', next: 'Asking a question', button: 'Next chapter' },
-    { code: 'name = input("What is your name? ")\nprint("Hello", name)', input: 'Sam', next: undefined, button: undefined },
+    { code: 'name = input("What is your name? ")\nprint("Hello", name)', inputs: ['Sam'], next: 'Asking more than one question', button: 'Next lesson' },
+    { code: 'first = input("First? ")\nsecond = input("Second? ")\nprint(first, second)', inputs: ['Sam', 'noodles'], next: 'Using an answer more than once', button: 'Next lesson' },
+    { code: 'name = input("Name? ")\nprint("Hello", name)\nprint("Welcome", name)', inputs: ['Sam'], next: 'Get to know you', button: 'Next lesson' },
+    { code: 'name = input("Name? ")\nhobby = input("Hobby? ")\nfood = input("Food? ")\nprint(name)\nprint(hobby)\nprint(food)', inputs: ['Sam', 'drawing', 'noodles'], next: undefined, button: undefined },
   ]
 
   for (const lesson of lessonsToComplete) {
     await setEditorCode(page, lesson.code)
     await page.getByRole('button', { name: /Run code/ }).click()
-    if (lesson.input) await answerLivePrompt(page, lesson.input)
+    if (lesson.inputs) {
+      for (const [index, input] of lesson.inputs.entries()) {
+        await answerLivePrompt(page, input, index + 1)
+      }
+    }
     const lessonOutput = page.getByRole('region', { name: 'Python output' })
     await expect(lessonOutput).toContainText(/.+/, { timeout: 20_000 })
     await page.getByRole('button', { name: /Check answer/ }).click()
@@ -118,6 +125,9 @@ test('the available learning path reaches the next chapter', async ({ page, brow
   }
 
   await expect(page.getByText('Chapter complete')).toBeVisible()
+  await expect(page.getByText('Types and numbers is the next chapter.')).toBeVisible()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-input-chapter-complete.png`, fullPage: true })
 })
 
 test('interactive input supports multiple prompts and line reads', async ({ page, browserName }, testInfo) => {

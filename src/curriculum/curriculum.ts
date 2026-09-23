@@ -6,12 +6,14 @@ import { functionsModule } from './modules/functions'
 import { inputModule } from './modules/input'
 import { loopsModule } from './modules/loops'
 import { projectsModule } from './modules/projects'
+import { typesModule } from './modules/types'
 
 export const curriculum: Curriculum = {
   title: 'Python Steps',
   modules: [
     fundamentalsModule,
     inputModule,
+    typesModule,
     decisionsModule,
     loopsModule,
     collectionsModule,
