@@ -12,6 +12,15 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Keep selected code readable against CodeMirror's dark editor surface. */
+.cm-editor .cm-content::selection,
+.cm-editor .cm-content *::selection,
+.cm-editor .cm-line::selection,
+.cm-editor .cm-line *::selection {
+  color: #e8f3ef !important;
+  background: #287f78 !important;
+}
+
 @supports not (min-height: 100dvh) {
   body,
   #root {

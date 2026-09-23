@@ -17,7 +17,7 @@ export type OutputValidation = {
 
 export type AstValidation = {
   kind: 'ast'
-  requirement: 'text-variable'
+  requirement: 'text-variable' | 'formatted-output'
   reject?: string[]
 }
 

@@ -1,5 +1,4 @@
 import type { Module } from '../types'
-import { futureLesson } from './future-lesson'
 
 export const fundamentalsModule: Module = {
   id: 'fundamentals',
@@ -92,12 +91,25 @@ export const fundamentalsModule: Module = {
       validation: { kind: 'ast', requirement: 'text-variable', reject: ['pizza'] },
       status: 'ready',
     },
-    futureLesson(
-      'values-in-sentences',
-      5,
-      'Putting values into sentences',
-      'Use a remembered value inside a sentence.',
-      'Make a sentence that includes a value stored in a variable.',
-    ),
+    {
+      id: 'values-in-sentences',
+      order: 5,
+      title: 'Putting values into sentences',
+      shortTitle: 'Values in sentences',
+      summary: 'Use a variable inside a sentence with an f-string.',
+      explanation: {
+        lead: 'An f-string lets you put a variable inside a sentence. Put f before the quotes and the variable inside curly brackets.',
+        notes: ['For example: f"I like {food}".'],
+      },
+      exampleCode: 'food = "pizza"\nprint(f"I like {food}")',
+      starterCode: 'food = "pizza"\nprint(f"I like {food}")',
+      task: 'Create a variable for your favourite food and print a sentence that includes it.',
+      hints: [
+        'Change the value in the variable to something you like.',
+        'Keep the f before the opening quotation mark and put the variable inside {curly brackets}.',
+      ],
+      validation: { kind: 'ast', requirement: 'formatted-output', reject: ['I like pizza'] },
+      status: 'ready',
+    },
   ],
 }

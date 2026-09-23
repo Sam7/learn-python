@@ -63,7 +63,7 @@ test('refresh restores the active lesson and edited code', async ({ page, browse
   await expect(page.locator('.cm-content')).toContainText('books')
 })
 
-test('the four lesson definitions form a complete progressive path', async ({ page, browserName }) => {
+test('the five available fundamentals lessons form a complete progressive path', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
   await waitForPython(page)
 
@@ -71,7 +71,8 @@ test('the four lesson definitions form a complete progressive path', async ({ pa
     { code: 'print("Hello Python!")', next: 'Printing your own text' },
     { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths' },
     { code: 'print(12 + 8)', next: 'Remembering things' },
-    { code: 'favourite_food = "mango"\nprint(favourite_food)', next: undefined },
+    { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences' },
+    { code: 'favourite_food = "mango"\nprint(f"My favourite food is {favourite_food}.")', next: undefined },
   ]
 
   for (const lesson of lessonsToComplete) {
@@ -88,6 +89,23 @@ test('the four lesson definitions form a complete progressive path', async ({ pa
   }
 
   await expect(page.getByText('More lessons are coming soon.')).toBeVisible()
+})
+
+test('selected code keeps a readable light foreground', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Selection styling is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+  const editor = page.locator('.cm-content')
+  await editor.click()
+  await page.keyboard.press('Control+A')
+  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-code-selection.png`, fullPage: false })
+
+  const selectionStyles = await page.evaluate(() => {
+    const editorElement = document.querySelector('.cm-content')
+    if (!editorElement) return null
+    const style = getComputedStyle(editorElement, '::selection')
+    return { color: style.color, backgroundColor: style.backgroundColor }
+  })
+
+  expect(selectionStyles).toEqual({ color: 'rgb(232, 243, 239)', backgroundColor: 'rgb(40, 127, 120)' })
 })
 
 test('invalid Python gives a useful error and does not complete the lesson', async ({ page, browserName }) => {

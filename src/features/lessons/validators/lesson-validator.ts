@@ -38,8 +38,28 @@ function validateOutput(lesson: Lesson, context: LessonValidationContext): Valid
     : { passed: false, message: 'Your program needs to print a value.' }
 }
 
-function astValidationProgram(source: string): string {
+function astValidationProgram(source: string, requirement: 'text-variable' | 'formatted-output'): string {
   const sourceLiteral = JSON.stringify(source)
+  const requirementCheck = requirement === 'text-variable'
+    ? `
+if not has_text_variable:
+    raise AssertionError("Create a variable containing some text first.")
+`
+    : `
+if not has_text_variable:
+    raise AssertionError("Create a variable containing some text first.")
+
+has_formatted_output = any(
+    isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    and any(isinstance(argument, ast.JoinedStr) for argument in node.args)
+    for node in ast.walk(tree)
+)
+if not has_formatted_output:
+    raise AssertionError("Use an f-string to put your variable inside a sentence.")
+`
+
   return `
 import ast
 
@@ -53,8 +73,7 @@ has_text_variable = any(
     and len(node.value.value.strip()) > 0
     for node in ast.walk(tree)
 )
-if not has_text_variable:
-    raise AssertionError("Create a variable containing some text first.")
+${requirementCheck}
 exec(compile(tree, "<learner>", "exec"), {})
 `
 }
@@ -74,12 +93,20 @@ async function validateAst(lesson: Lesson, context: LessonValidationContext): Pr
     return { passed: false, message: 'Change the example value to your own favourite food.' }
   }
 
-  const result = await context.runValidationCode(astValidationProgram(context.code))
+  const result = await context.runValidationCode(astValidationProgram(context.code, definition.requirement))
+  const isFormattedOutput = definition.requirement === 'formatted-output'
   return result.status === 'success'
-    ? { passed: true, message: 'Great work — you created and used a variable.' }
+    ? {
+        passed: true,
+        message: isFormattedOutput
+          ? 'Great work — you put a variable inside a sentence.'
+          : 'Great work — you created and used a variable.',
+      }
     : {
         passed: false,
-        message: result.error?.includes('Create a variable')
+        message: result.error?.includes('Use an f-string')
+          ? 'Use an f-string to put your variable inside a sentence.'
+          : result.error?.includes('Create a variable')
           ? 'Create a variable containing text, then print its name.'
           : 'Python could not check that yet. Make sure your code runs first.',
       }
