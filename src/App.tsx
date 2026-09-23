@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronRight, Code2, RotateCcw, Sparkles } from 'lucide-react'
+import { Code2, RotateCcw, Sparkles } from 'lucide-react'
 import { Button } from './components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
 import { CodeEditor } from './features/lessons/components/code-editor'
 import { CurriculumNavigator } from './features/lessons/components/curriculum-navigator'
-import { HintPanel } from './features/lessons/components/hint-panel'
-import { OutputPanel } from './features/lessons/components/output-panel'
+import { LessonActionBar } from './features/lessons/components/lesson-action-bar'
+import { LessonUtilityPanel } from './features/lessons/components/lesson-utility-panel'
 import { InputPanel } from './features/python/components/input-panel'
 import {
   allLessons,
@@ -70,10 +70,15 @@ function App() {
   const nextModule = curriculum.modules.find((module) => module.order > activeModule.order)
   const nextLesson = getNextLesson(activeLesson.id)
   const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
-  const nextActionLabel = nextLessonLocation?.module.id !== activeModule.id ? 'Next chapter' : 'Next lesson'
+  const nextActionLabel = nextLessonLocation
+    ? nextLessonLocation.module.id !== activeModule.id
+      ? 'Next chapter'
+      : 'Next lesson'
+    : 'Next lesson'
   const isBusy = workflow === 'executing' || workflow === 'waitingForInput' || workflow === 'validating'
   const isCurrentCompleted = progress.completedLessonIds.includes(activeLesson.id)
   const currentInputKey = interactiveInput ? 'interactive' : transcriptValue
+  const actionBarStatus = isBusy ? 'busy' : isCurrentCompleted || workflow === 'lessonPassed' ? 'complete' : 'ready'
 
   const updateProgress = useCallback((update: (current: LearnerProgress) => LearnerProgress) => {
     setProgress((current) => {
@@ -239,7 +244,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-paper text-ink">
+    <div className="flex min-h-[100dvh] flex-col bg-paper text-ink">
       <header className="sticky top-0 z-20 border-b border-line/80 bg-paper/95 backdrop-blur-md">
         <div className="mx-auto flex min-h-[68px] max-w-[1400px] items-center justify-between gap-4 px-5 py-3 sm:px-8 lg:px-10">
           <div className="flex items-center gap-3">
@@ -257,6 +262,7 @@ function App() {
               <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${moduleProgress.completedCount} of ${moduleProgress.availableCount} available lessons complete`}>
                 <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${(moduleProgress.completedCount / moduleProgress.availableCount) * 100}%` }} />
               </div>
+              <p className="mt-1 hidden text-[10px] leading-4 text-muted/60 sm:block">Nothing leaves this browser · progress saved on this device.</p>
             </div>
             <Button type="button" variant="quiet" size="sm" onClick={handleResetProgress} className="hidden sm:inline-flex">
               <RotateCcw size={15} aria-hidden="true" /> Reset
@@ -265,28 +271,30 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1400px] gap-7 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:py-10">
+      <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-0 lg:grid-cols-[auto_minmax(0,1fr)_minmax(280px,330px)]">
         <CurriculumNavigator
+          key={activeModule.id}
           curriculum={curriculum}
           currentLessonId={activeLesson.id}
           completedLessonIds={progress.completedLessonIds}
           onSelect={selectLesson}
         />
 
-        <div className="min-w-0">
-          <div className="mb-7 max-w-3xl">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge>Step {activeLesson.order}</Badge>
-              <span className="text-sm font-medium text-muted">{activeLesson.summary}</span>
+        <section className="min-w-0 px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-7">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge>Step {activeLesson.order}</Badge>
+                <span className="text-sm font-medium text-muted">{activeLesson.summary}</span>
+              </div>
+              <h1 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.055em] text-ink">{activeLesson.title}</h1>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{activeLesson.explanation.lead}</p>
+              {activeLesson.explanation.notes?.length ? (
+                <ul className="mt-3 space-y-1 text-sm leading-6 text-muted">
+                  {activeLesson.explanation.notes.map((note) => <li key={note} className="before:mr-2 before:text-teal before:content-['•']">{note}</li>)}
+                </ul>
+              ) : null}
             </div>
-            <h1 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.055em] text-ink">{activeLesson.title}</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{activeLesson.explanation.lead}</p>
-            {activeLesson.explanation.notes?.length ? (
-              <ul className="mt-3 space-y-1 text-sm leading-6 text-muted">
-                {activeLesson.explanation.notes.map((note) => <li key={note} className="before:mr-2 before:text-teal before:content-['•']">{note}</li>)}
-              </ul>
-            ) : null}
-          </div>
 
           <div className="grid max-w-4xl gap-5">
             {activeLesson.exampleCode ? (
@@ -303,12 +311,17 @@ function App() {
 
             <Card className="border-teal/20 shadow-[0_10px_35px_rgba(40,127,120,0.07)]">
               <CardHeader className="pb-4">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-teal" aria-hidden="true"><Sparkles size={16} /></div>
-                  <div>
-                    <CardTitle>Try it yourself</CardTitle>
-                    <p className="mt-1 text-sm leading-6 text-muted">{activeLesson.task}</p>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-teal" aria-hidden="true"><Sparkles size={16} /></div>
+                    <div>
+                      <CardTitle>Try it yourself</CardTitle>
+                      <p className="mt-1 text-sm leading-6 text-muted">{activeLesson.task}</p>
+                    </div>
                   </div>
+                  <Button type="button" variant="quiet" size="sm" onClick={handleResetCode} disabled={isBusy} className="shrink-0">
+                    <RotateCcw size={15} aria-hidden="true" /> Reset code
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -329,56 +342,37 @@ function App() {
                 <div id="python-editor">
                   <CodeEditor value={code} onChange={handleCodeChange} />
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5">
-                  <Button type="button" size="lg" onClick={handleRun} disabled={isBusy || runtimeStatus !== 'ready'}>
-                    {workflow === 'executing' ? 'Running…' : 'Run code'} <ArrowRight size={17} aria-hidden="true" />
-                  </Button>
-                  <Button type="button" variant="secondary" size="lg" onClick={handleCheck} disabled={isBusy || runtimeStatus !== 'ready'}>
-                    <Check size={17} aria-hidden="true" /> Check answer
-                  </Button>
-                  <Button type="button" variant="quiet" size="lg" onClick={handleResetCode} disabled={isBusy}>Reset code</Button>
-                  <span className="basis-full text-xs text-muted sm:basis-auto sm:ml-auto">
-                    {runtimeStatus === 'loading' ? 'Preparing Python…' : runtimeStatus === 'error' ? 'Python could not start.' : interactiveInput ? 'Live input is ready.' : 'Use one line per input.'}
-                  </span>
-                </div>
                 {runtimeStatus === 'error' && runtimeError ? <p className="mt-3 text-sm text-coral" role="alert">{runtimeError}</p> : null}
-                {validationMessage ? (
-                  <div className={`mt-4 rounded-xl border px-4 py-3 text-sm leading-6 ${validationMessage.passed ? 'border-teal/25 bg-mist text-teal-dark' : 'border-coral/25 bg-coral/5 text-coral'}`} role="status">
-                    {validationMessage.message}
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
-
-            <OutputPanel execution={execution} isRunning={workflow === 'executing'} />
-
-            <HintPanel hints={activeLesson.hints} visibleCount={visibleHints} onReveal={() => setVisibleHints((count) => Math.min(count + 1, activeLesson.hints.length))} />
-
-            {workflow === 'lessonPassed' || isCurrentCompleted ? (
-              <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-teal/25 bg-mist p-5 sm:flex-row sm:items-center sm:p-6">
-                <div>
-                  <p className="flex items-center gap-2 text-sm font-bold text-teal-dark"><Check size={17} aria-hidden="true" /> Lesson complete</p>
-                  <p className="mt-1 text-sm leading-6 text-muted">You can revisit this step any time.</p>
-                </div>
-                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>{nextActionLabel} <ChevronRight size={18} aria-hidden="true" /></Button> : (
-                  <div className="text-left sm:text-right">
-                    <p className="text-sm font-semibold text-teal-dark">Chapter complete</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">
-                      {nextModule
-                        ? `You finished the available lessons in ${activeModule.title}. ${nextModule.title} is the next chapter.`
-                        : `You finished the available lessons in ${activeModule.title}. More lessons are coming soon.`}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : null}
+            </div>
           </div>
-        </div>
+
+        </section>
+
+        <LessonUtilityPanel
+          key={activeLesson.id}
+          execution={execution}
+          isRunning={workflow === 'executing'}
+          validationMessage={validationMessage}
+          hints={activeLesson.hints}
+          visibleHints={visibleHints}
+          onRevealHint={() => setVisibleHints((count) => Math.min(count + 1, activeLesson.hints.length))}
+        />
       </main>
 
-      <footer className="mx-auto max-w-[1400px] px-5 pb-8 pt-1 text-xs text-muted sm:px-8 lg:px-10">
-        Nothing leaves this browser. Your progress is saved on this device.
-      </footer>
+      <LessonActionBar
+        status={actionBarStatus}
+        runtimeStatus={runtimeStatus}
+        isBusy={isBusy}
+        hasNextLesson={Boolean(nextLesson) && isCurrentCompleted}
+        nextActionLabel={nextActionLabel}
+        nextModuleTitle={nextModule?.title}
+        onRun={handleRun}
+        onCheck={handleCheck}
+        onNext={handleNextLesson}
+      />
+
     </div>
   )
 }

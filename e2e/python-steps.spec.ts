@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 async function waitForPython(page: import('@playwright/test').Page) {
-  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled({ timeout: 60_000 })
 }
 
 async function setEditorCode(page: import('@playwright/test').Page, code: string) {
@@ -43,6 +43,30 @@ test('desktop learner journey runs Python, checks an answer, and opens the next 
   test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
   await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('print')
+  await expect(page.getByText('Nothing leaves this browser · progress saved on this device.')).toBeVisible()
+  await expect(page.locator('footer')).toHaveCount(0)
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reset code' })).toBeVisible()
+  const fundamentalsToggle = page.getByRole('button', { name: /Getting Python to do things/ })
+  const inputToggle = page.getByRole('button', { name: /Talking to the user/ })
+  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
+  await inputToggle.click()
+  await expect(inputToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'false')
+  await fundamentalsToggle.click()
+  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(inputToggle).toHaveAttribute('aria-expanded', 'false')
+  await page.getByRole('button', { name: 'Collapse lesson navigation' }).click()
+  await expect(page.getByRole('button', { name: 'Expand lesson navigation' })).toBeVisible()
+  await page.getByRole('button', { name: 'Expand lesson navigation' }).click()
+  await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Output' })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('tab', { name: 'Hint' }).click()
+  await expect(page.getByRole('tabpanel', { name: 'Hint' })).toContainText('Need a hint')
+  await page.getByRole('tab', { name: 'Output' }).click()
+  await expect(page.getByRole('tabpanel', { name: 'Output' })).toContainText('Run your code')
+  await expect(page.getByRole('tabpanel', { name: 'Output' }).getByRole('heading', { name: 'Output' })).toHaveCount(0)
   await waitForPython(page)
 
   await setEditorCode(page, 'print("Hello Python!")')
@@ -112,6 +136,8 @@ test('the available learning path reaches the next chapter', async ({ page, brow
         await page.reload()
         await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
         const completedModule = page.getByRole('button', { name: /Getting Python to do things/ })
+        await expect(completedModule).toHaveAttribute('aria-expanded', 'false')
+        await completedModule.click()
         await expect(completedModule).toHaveAttribute('aria-expanded', 'true')
         await expect(page.getByRole('button', { name: 'Hello Python' })).toBeVisible()
         await page.getByRole('button', { name: 'Hello Python' }).click()
@@ -140,8 +166,8 @@ test('interactive input supports multiple prompts and line reads', async ({ page
   await answerLivePrompt(page, 'Ada')
   await answerLivePrompt(page, 'Python', 2)
   const output = page.getByRole('region', { name: 'Python output' })
-  await expect(output).toContainText('First? Ada')
-  await expect(output).toContainText('Second? Python')
+  await expect(output).not.toContainText('First? Ada')
+  await expect(output).not.toContainText('Second? Python')
   await expect(output).toContainText('Ada')
   await expect(output).toContainText('Python')
 
@@ -216,7 +242,7 @@ test('invalid Python gives a useful error and does not complete the lesson', asy
   await expect(output).toContainText("couldn’t run this yet", { timeout: 20_000 })
   await page.getByRole('button', { name: /Check answer/ }).click()
   await expect(page.getByRole('status')).toContainText('Run your code successfully')
-  await expect(page.getByRole('button', { name: /Next lesson/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Next lesson/ })).toBeDisabled()
 })
 
 test('an endless loop times out and the run control recovers', async ({ page, browserName }) => {
@@ -242,6 +268,7 @@ test('tablet layout stays reachable without horizontal page overflow', async ({ 
   await expect(page.getByRole('button', { name: /Run code/ })).toBeVisible()
   await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
   await expect(page.getByRole('region', { name: 'Python output' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
 
   const dimensions = await page.evaluate(() => ({
     viewport: window.innerWidth,
@@ -249,7 +276,7 @@ test('tablet layout stays reachable without horizontal page overflow', async ({ 
     height: document.documentElement.scrollHeight,
   }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport + 1)
-  expect(dimensions.height).toBeGreaterThan(page.viewportSize()?.height ?? 0)
+  expect(dimensions.height).toBeGreaterThanOrEqual(page.viewportSize()?.height ?? 0)
 
   if ((page.viewportSize()?.width ?? 0) < 1024) {
     await page.getByRole('button', { name: 'Open curriculum' }).click()

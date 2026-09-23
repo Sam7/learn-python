@@ -12,6 +12,7 @@
 - [x] Polish and regression: screenshots, accessibility, full test/build/lint review
 - [x] Curriculum refactor: typed curriculum/module model, eight-module pathway, and responsive curriculum navigator
 - [x] General Python input: live worker prompts, transcript fallback, cancellation, and behavior validation
+- [x] Lesson workspace layout: collapsible navigation, Output/Hint utility tabs, and sticky primary actions
 
 ## Working decisions
 
@@ -33,3 +34,5 @@
 - Chromium and WebKit tablet screenshots were inspected for desktop, iPad landscape, and iPad portrait layouts.
 - The curriculum navigator uses a compact sidebar at desktop/tablet landscape widths and a bottom-sheet lesson chooser at portrait widths. Playwright covers opening and closing the portrait navigator without introducing page overflow.
 - The input runner uses Pyodide's pinned stdin support for repeated line reads, captures prompts separately from program stdout, and behavior-checks input lessons with hidden answers, multiple-input requirements, and answer reuse.
+- The lesson workspace keeps Reset code beside the editor, places validation feedback inside the Output utility tab, and keeps progression actions in a sticky footer without locking the page to a fixed viewport.
+- Python input remains fully supported, but entered values are intentionally not rendered in Output; the panel shows program stdout, errors, duration, and validation feedback only.

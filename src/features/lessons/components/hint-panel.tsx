@@ -5,14 +5,15 @@ interface HintPanelProps {
   hints: string[]
   visibleCount: number
   onReveal: () => void
+  embedded?: boolean
 }
 
-export function HintPanel({ hints, visibleCount, onReveal }: HintPanelProps) {
+export function HintPanel({ hints, visibleCount, onReveal, embedded = false }: HintPanelProps) {
   if (hints.length === 0) return null
   const canReveal = visibleCount < hints.length
 
   return (
-    <section className="rounded-2xl border border-[#eadfbd] bg-[#fffaf0] p-5" aria-label="Hints">
+    <section className={embedded ? 'min-h-[280px] bg-[#fffaf0] p-5' : 'rounded-2xl border border-[#eadfbd] bg-[#fffaf0] p-5'} aria-label="Hints">
       <div className="flex items-start gap-3">
         <Lightbulb size={18} className="mt-0.5 shrink-0 text-[#a37a26]" aria-hidden="true" />
         <div className="min-w-0 flex-1">

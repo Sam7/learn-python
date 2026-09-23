@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, Circle, LockKeyhole, Menu, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Circle, LockKeyhole, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { cn } from '../../../lib/utils'
 import {
@@ -108,10 +108,10 @@ function ModuleSection({
                 )}
               >
                 <span className={cn(
-                  'flex size-7 shrink-0 items-center justify-center rounded-full border text-xs',
-                  isCompleted ? 'border-teal bg-teal text-white' : isCurrent ? 'border-teal bg-white text-teal' : 'border-line bg-white text-muted',
+                  'flex size-8 shrink-0 items-center justify-center border-2 text-xs',
+                  isCompleted ? 'rounded-lg border-teal bg-teal text-white shadow-sm ring-2 ring-teal/20' : isCurrent ? 'rounded-full border-teal bg-white text-teal' : 'rounded-full border-line bg-white text-muted',
                 )} aria-hidden="true">
-                  {isCompleted ? <Check size={14} strokeWidth={2.5} /> : isFuture ? <LockKeyhole size={12} /> : isOpen ? <Circle size={9} fill="currentColor" /> : <LockKeyhole size={12} />}
+                  {isCompleted ? <Check size={16} strokeWidth={3} /> : isFuture ? <LockKeyhole size={12} /> : isOpen ? <Circle size={9} fill="currentColor" /> : <LockKeyhole size={12} />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold leading-5">{lesson.shortTitle}</span>
@@ -165,31 +165,20 @@ function NavigatorContent({
 
 export function CurriculumNavigator({ curriculum, currentLessonId, completedLessonIds, onSelect }: CurriculumNavigatorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const location = getLessonLocation(currentLessonId)
   const currentModule = location?.module ?? curriculum.modules[0]
   const currentLesson = location?.lesson ?? currentModule.lessons[0]
-  const [moduleExpansionOverrides, setModuleExpansionOverrides] = useState<Record<string, boolean>>({})
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(currentModule.id)
 
-  const isModuleExpandedByDefault = (module: Module) => (
-    module.id === currentModule?.id || getModuleProgress(module, completedLessonIds).isComplete
-  )
-
-  const isModuleExpanded = (module: Module) => (
-    moduleExpansionOverrides[module.id] ?? isModuleExpandedByDefault(module)
-  )
+  const isModuleExpanded = (module: Module) => expandedModuleId === module.id
 
   const expandedModuleIds = new Set(
     curriculum.modules.filter(isModuleExpanded).map((module) => module.id),
   )
 
   const toggleModule = (moduleId: string) => {
-    const module = curriculum.modules.find((item) => item.id === moduleId)
-    if (!module) return
-    const currentlyExpanded = isModuleExpanded(module)
-    setModuleExpansionOverrides((overrides) => ({
-      ...overrides,
-      [moduleId]: !currentlyExpanded,
-    }))
+    setExpandedModuleId((current) => current === moduleId ? null : moduleId)
   }
 
   useEffect(() => {
@@ -203,19 +192,54 @@ export function CurriculumNavigator({ curriculum, currentLessonId, completedLess
 
   return (
     <>
-      <aside className="hidden border-r border-line pr-7 lg:block" aria-label="Curriculum">
-        <div className="mb-5 flex items-center gap-2 px-2">
-          <Menu size={16} className="text-teal" aria-hidden="true" />
-          <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-muted">Curriculum</h2>
-        </div>
-        <NavigatorContent
-          curriculum={curriculum}
-          currentLessonId={currentLessonId}
-          completedLessonIds={completedLessonIds}
-          expandedModuleIds={expandedModuleIds}
-          onToggleModule={toggleModule}
-          onSelect={onSelect}
-        />
+      <aside
+        className={cn(
+          'hidden border-r border-line transition-[width] duration-200 lg:block',
+          isCollapsed ? 'w-14 pr-0' : 'w-[280px] pr-7',
+        )}
+        aria-label="Curriculum"
+      >
+        {isCollapsed ? (
+          <div className="flex justify-center px-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="size-10 px-0"
+              aria-label="Expand lesson navigation"
+              onClick={() => setIsCollapsed(false)}
+            >
+              <PanelLeftOpen size={17} aria-hidden="true" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-5 flex items-center justify-between gap-2 px-2">
+              <div className="flex items-center gap-2">
+                <Menu size={16} className="text-teal" aria-hidden="true" />
+                <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-muted">Lessons</h2>
+              </div>
+              <Button
+                type="button"
+                variant="quiet"
+                size="sm"
+                className="size-9 px-0"
+                aria-label="Collapse lesson navigation"
+                onClick={() => setIsCollapsed(true)}
+              >
+                <PanelLeftClose size={17} aria-hidden="true" />
+              </Button>
+            </div>
+            <NavigatorContent
+              curriculum={curriculum}
+              currentLessonId={currentLessonId}
+              completedLessonIds={completedLessonIds}
+              expandedModuleIds={expandedModuleIds}
+              onToggleModule={toggleModule}
+              onSelect={onSelect}
+            />
+          </>
+        )}
       </aside>
 
       <div className="lg:hidden">
