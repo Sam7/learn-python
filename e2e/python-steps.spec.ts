@@ -37,6 +37,32 @@ async function capture(page: Page, testInfo: TestInfo, label: string) {
   await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-${label}.png`, fullPage: false })
 }
 
+async function openStageOneExpressionLesson(page: Page) {
+  await page.evaluate(() => {
+    localStorage.setItem('python-steps:progress', JSON.stringify({
+      version: 2,
+      currentLessonId: 'stage-1-lesson-3',
+      currentStepByLesson: { 'stage-1-lesson-3': 'watch-an-expression-collapse' },
+      completedActivityIds: [
+        'print-a-greeting',
+        'predict-message-order',
+        'put-instructions-in-order',
+        'experiment-with-output',
+        'repair-a-missing-quote',
+        'trace-three-instructions',
+        'write-a-three-line-introduction',
+        'predict-number-and-text',
+        'number-or-text',
+        'predict-three-calculations',
+        'edit-three-calculations',
+      ],
+      activityProgress: {},
+    }))
+  })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Expressions collapse into values' })).toBeVisible()
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
@@ -80,8 +106,10 @@ test('Stage 0: prediction, output, and saved progress work across a refresh', as
   await expect(page.getByRole('button', { name: 'Next lesson' })).toBeEnabled()
 })
 
-test('Stage 0: experiments, error repair, execution tracing, and a three-line creation all complete', async ({ page, browserName }) => {
+test('Stages 0–1: the first two curriculum stages complete as expected', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Curriculum content execution is covered in Chromium.')
+  test.setTimeout(150_000)
+  const output = page.getByRole('region', { name: 'Python output' })
   await runAndExpectPass(page, 'print("Mine!")')
   await page.getByRole('button', { name: 'Next lesson' }).click()
   await page.getByRole('textbox', { name: 'Your output prediction' }).fill('First\nSecond\nThird')
@@ -97,7 +125,6 @@ test('Stage 0: experiments, error repair, execution tracing, and a three-line cr
   await page.getByRole('textbox', { name: 'Your reflection' }).fill('I duplicated the second instruction, so the message appeared twice.')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  const output = page.getByRole('region', { name: 'Python output' })
   await page.getByRole('button', { name: 'Run code' }).click()
   await expect(output).toContainText('Python couldn’t run this yet.', { timeout: 20_000 })
   await expect(output).toContainText('SyntaxError')
@@ -117,11 +144,75 @@ test('Stage 0: experiments, error repair, execution tracing, and a three-line cr
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await runAndExpectPass(page, 'print("My name is Nova")\nprint("I live under the sea")\nprint("I collect tiny rocks")')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
   await expect(page.getByRole('progressbar', { name: 'Required task progress' })).toHaveAttribute('aria-valuenow', '1')
   await expect(page.getByText('6/6 ready')).toBeVisible()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Values', exact: true })).toBeVisible()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('7\nseven')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 7')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'No. One is a number; one is text.' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('7\n8\n30')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 7')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(4 + 3)\nprint(10 - 2)\nprint(6 * 5)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await capture(page, testInfo, 'stage-1-expression-desktop')
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('14')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 14')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(4 * 5)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('36\n16')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 36')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print((10 + 2) * 3)\nprint(10 + (2 * 3))')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('haha\nhahaha')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed haha')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('52')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 52')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(output).toContainText('Python raised TypeError, as expected.')
+  await expect(output).toContainText('TypeError:')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('8')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 8')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(len("Python"))')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runAndExpectPass(page, 'print(3 * 60)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(2 * 60 * 60)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(2 * 60 * 60 + 15 * 60)')
+  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByText('8/8 ready')).toBeVisible()
+  await page.getByRole('button', { name: 'Show a hint' }).click()
+  await capture(page, testInfo, 'stage-1-desktop')
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'First tiny creation' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Expression mini-challenge' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('15 * 60')
   await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
 })
 
@@ -212,6 +303,12 @@ test('tablet layout remains focusable, scrollable, and free from horizontal over
   await expect(page.getByRole('button', { name: 'Run code' })).toBeVisible()
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
   await capture(page, testInfo, `ipad-${rotatedOrientation}`)
+  await openStageOneExpressionLesson(page)
+  await expect(page.getByText('Watch the expression reduce')).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Expression evaluation steps' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Your output prediction' })).toBeVisible()
+  await verifyViewport(page)
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-1-expression`)
 })
 
 async function verifyViewport(page: Page) {

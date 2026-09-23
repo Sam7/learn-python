@@ -47,13 +47,13 @@ Use another step when the learner should explicitly choose Previous/Next between
 }
 ```
 
-The `ContentBlock` union is intentionally small: `paragraph`, `list`, `callout`, and `example`. The learner sees these blocks in array order above that step's activity. Keep examples small and runnable-looking; they are instructional code, not submitted code.
+The `ContentBlock` union is intentionally small: `paragraph`, `list`, `callout`, `example`, and `evaluation`. The evaluation block shows a source expression and its ordered reductions as instructional content; it does not simulate or replace real Python execution. The learner sees these blocks in array order above that step's activity. Keep examples small and runnable-looking; they are instructional code, not submitted code.
 
 ## Reusable activity kinds
 
 The discriminated `LearningActivity` union is in `src/curriculum/types.ts`:
 
-- `code`: editable CodeMirror program. Run executes the program, displays output beside the editor, and immediately assesses the result. Use `required: true` for a gating task. `assessment` can check output, run behavior cases with different stdin values, or use Python's `ast` module for a concept-specific requirement.
+- `code`: editable CodeMirror program. Run executes the program, displays output beside the editor, and immediately assesses the result. Use `required: true` for a gating task. `assessment` can check output, run behavior cases with different stdin values, use Python's `ast` module for a concept-specific requirement, or treat a specified runtime exception as the observation being assessed (the real exception remains visible).
 - `predict-output`: saves a written prediction, runs the provided program, then compares the prediction with actual stdout.
 - `predict-state`: saves a choice, traces real Python execution in the worker, and compares the chosen value with the captured local variable at the requested line/occurrence. Ensure `expectedValue` is among the choices.
 - `choice`: deterministic, immediately assessed selection.

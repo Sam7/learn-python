@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes only the fully authored Stage 0 lessons and leaves the rest as ordered future curriculum data', () => {
+  it('publishes the fully authored Stage 0 and Stage 1 lessons and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -56,12 +56,22 @@ describe('the canonical curriculum outline', () => {
       'Computers are extremely literal',
       'Trace the execution pointer',
       'First tiny creation',
+      'Values',
+      'The computer can calculate',
+      'Expressions collapse into values',
+      'Expressions can contain expressions',
+      'Text can be manipulated too',
+      'Different values allow different operations',
+      'Functions as black boxes',
+      'Expression mini-challenge',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(103)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(95)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
-    expect(getNextCurriculumLesson('first-tiny-creation')?.status).toBe('coming-soon')
-    expect(getNextLesson('first-tiny-creation')).toBeUndefined()
+    expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
+    expect(getNextLesson('first-tiny-creation')?.title).toBe('Values')
+    expect(getNextCurriculumLesson('stage-1-lesson-8')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-1-lesson-8')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -288,5 +298,75 @@ describe('Stage 0 activity assessment', () => {
     }
     expect((await assessActivity(activity, { response: 'first', execution: success(''), runPython: noRun })).passed).toBe(true)
     expect((await assessActivity(activity, { response: 'last', execution: success(''), runPython: noRun })).passed).toBe(false)
+  })
+})
+
+describe('Stage 1 activity assessment', () => {
+  it('publishes all eight lessons as complete, required learning journeys', () => {
+    const stage = curriculum.stages.find((item) => item.id === 'stage-1')!
+    expect(stage.lessons).toHaveLength(8)
+    expect(stage.lessons.every((lesson) => lesson.status === 'ready' && lesson.steps.length > 0)).toBe(true)
+    expect(stage.lessons.every((lesson) => lesson.steps.some((step) => step.activity?.required))).toBe(true)
+    expect(stage.lessons.flatMap((lesson) => lesson.steps).flatMap((step) => step.content).some((block) => block.type === 'evaluation')).toBe(true)
+  })
+
+  it('treats only the expected runtime error as a successful observation', async () => {
+    const activity = getLessonById('stage-1-lesson-6')!.steps[0].activity!
+    expect(activity.kind).toBe('code')
+    if (activity.kind !== 'code') throw new Error('Expected a code activity')
+    const expected = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: { ...success(''), status: 'error', error: "TypeError: can only concatenate str (not \"int\") to str" },
+      runPython: noRun,
+    })
+    expect(expected).toMatchObject({ passed: true })
+
+    const unrelated = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: { ...success(''), status: 'error', error: 'ValueError: invalid value' },
+      runPython: noRun,
+    })
+    expect(unrelated).toMatchObject({ passed: false, evidence: { expected: 'TypeError' } })
+
+    const successful = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('7\n'),
+      runPython: noRun,
+    })
+    expect(successful).toMatchObject({ passed: false, evidence: { actual: 'The program ran successfully.' } })
+  })
+
+  it('accepts changed parentheses only when both output lines are different and non-empty', async () => {
+    const activity = getLessonById('stage-1-lesson-4')!.steps[1].activity!
+    expect((await assessActivity(activity, {
+      code: 'print((10 + 2) * 3)\nprint(10 + (2 * 3))',
+      execution: success('36\n16\n'),
+      runPython: noRun,
+    })).passed).toBe(true)
+    expect((await assessActivity(activity, {
+      code: activity.kind === 'code' ? activity.starterCode : '',
+      execution: success('36\n36\n'),
+      runPython: noRun,
+    })).passed).toBe(false)
+    expect((await assessActivity(activity, {
+      code: 'print((10 + 2) * 3)\nprint()',
+      execution: success('36\n\n'),
+      runPython: noRun,
+    })).passed).toBe(false)
+  })
+
+  it('requires expressions to produce the requested seconds at every mini-challenge step', async () => {
+    const lesson = getLessonById('stage-1-lesson-8')!
+    const outputs = ['180', '7200', '8100']
+    for (const [index, output] of outputs.entries()) {
+      const activity = lesson.steps[index].activity!
+      expect(activity.kind).toBe('code')
+      const result = await assessActivity(activity, {
+        code: `print(${output})`,
+        execution: success(`${output}\n`),
+        runPython: noRun,
+      })
+      expect(result.passed).toBe(true)
+    }
   })
 })

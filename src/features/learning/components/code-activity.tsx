@@ -79,7 +79,12 @@ export function CodeActivityView({
           {input.interactive && input.pendingRequest ? <InputPanel {...input} /> : null}
           {runtimeError ? <p className="mt-2 text-xs text-coral" role="alert">{runtimeError}</p> : null}
         </div>
-        <ExecutionOutput execution={execution} isRunning={isRunning} feedback={feedback} />
+        <ExecutionOutput
+          execution={execution}
+          isRunning={isRunning}
+          feedback={feedback}
+          expectedRuntimeError={activity.assessment.kind === 'runtime-error' ? activity.assessment.exceptionName : undefined}
+        />
       </div>
 
       <ActivityHints hints={activity.hints ?? []} visibleCount={hintsRevealed} onReveal={onRevealHint} />

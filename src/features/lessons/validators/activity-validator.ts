@@ -39,6 +39,10 @@ function expectationMatches(expectation: OutputExpectation, stdout: string): boo
   if (expectation.mode === 'contains') return expectation.values.every((value) => output.includes(value))
   const lines = outputLines(stdout)
   if (expectation.mode === 'line-count') return lines.length === expectation.count
+  if (expectation.mode === 'distinct-lines') {
+    const values = lines.map((line) => line.trim())
+    return values.length === expectation.count && values.every(Boolean) && new Set(values).size === expectation.count
+  }
   return lines.some((line) => line.trim().length > 0)
 }
 
@@ -52,6 +56,7 @@ function expectationDescription(expectation: OutputExpectation): string {
   if (expectation.mode === 'exact') return expectation.lines.join('\n')
   if (expectation.mode === 'contains') return `Output includes: ${expectation.values.join(', ')}`
   if (expectation.mode === 'line-count') return `${expectation.count} output line${expectation.count === 1 ? '' : 's'}`
+  if (expectation.mode === 'distinct-lines') return `${expectation.count} different non-empty output lines`
   return 'some non-empty output'
 }
 
@@ -136,9 +141,32 @@ async function validateCodeActivity(
   activity: CodeActivity,
   context: ActivityAssessmentContext,
 ): Promise<ValidationResult> {
+  const assessment = activity.assessment
+  if (assessment.kind === 'runtime-error') {
+    const errorLines = context.execution.error?.split('\n').map((line) => line.trimStart()) ?? []
+    const expectedError = errorLines.some((line) => line.startsWith(`${assessment.exceptionName}:`))
+    if (context.execution.status === 'error' && expectedError) {
+      return { passed: true, message: `Good observation — Python raised the expected ${assessment.exceptionName}.` }
+    }
+    if (context.execution.status === 'success') {
+      return {
+        passed: false,
+        message: 'Python ran this program, but this task is about noticing an error.',
+        evidence: { expected: assessment.exceptionName, actual: 'The program ran successfully.' },
+      }
+    }
+    if (context.execution.status === 'error') {
+      return {
+        passed: false,
+        message: 'Python showed a different error. Read the message and try the example again.',
+        evidence: { expected: assessment.exceptionName, actual: context.execution.error ?? 'An unknown error occurred.' },
+      }
+    }
+    return failedExecution(context.execution)
+  }
+
   if (context.execution.status !== 'success') return failedExecution(context.execution)
   const source = context.code ?? activity.starterCode
-  const assessment = activity.assessment
 
   if (assessment.kind === 'output') return validateOutputActivity(activity, context.execution.stdout)
 

@@ -41,7 +41,7 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 ## Project shape
 
-- `src/curriculum/` contains the typed Stage 0–11 curriculum outline from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons. Stage 0's six lessons are fully available; later lessons remain structured as `coming-soon` data until authored and tested.
+- `src/curriculum/` contains the typed Stage 0–11 curriculum outline from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons. The six Stage 0 lessons and eight Stage 1 lessons are fully available; later lessons remain structured as `coming-soon` data until authored and tested.
 - `src/features/learning/` renders generic activity types and owns the learner session/progression workflow. Lesson-specific rules stay in curriculum data and validation strategies.
 - `src/features/lessons/validators/` contains output, behavior, and Python-AST-backed code assessment.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.
@@ -54,8 +54,8 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 1. Add a `Lesson` to the corresponding file in `src/curriculum/stages/`. Give the lesson, every step, and every activity a stable unique ID; saved progress is keyed by those IDs.
 2. Set its stage/lesson `order`, summary, concept tags, and `status`. Navigation derives order from these values. Use `coming-soon` until a lesson has a complete, tested journey.
-3. Add ordered `LessonStep` records. Each step can interleave short `content` blocks (paragraph, list, callout, example) and one optional activity. A step without an activity is a short reading/observation stop. Required activities gate moving on; optional activities and reflections do not.
-4. Choose an existing generic interaction: editable code, predict output/state, choice, arrange code, step-through trace, or optional reflection. A code task is assessed automatically when Run is pressed—there is no separate Check action.
+3. Add ordered `LessonStep` records. Each step can interleave short `content` blocks (paragraph, list, callout, example, expression evaluation) and one optional activity. A step without an activity is a short reading/observation stop. Required activities gate moving on; optional activities and reflections do not.
+4. Choose an existing generic interaction: editable code, predict output/state, choice, arrange code, step-through trace, or optional reflection. Code can be assessed by output, behavior, Python AST, or an expected runtime error. A code task is assessed automatically when Run is pressed—there is no separate Check action.
 5. Choose behavior rather than exact-source validation: output expectations for visible results, behavior cases for varied inputs, and Python AST checks only when a concept itself is required. Existing examples and JSON shapes are in [the lesson-authoring guide](docs/lesson-authoring.md).
 6. Add focused curriculum/validator tests. Add or update Playwright coverage when the learner journey or interaction changes.
 7. Run unit tests, lint, build, and Playwright; inspect desktop and tablet screenshots.

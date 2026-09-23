@@ -12,7 +12,7 @@
 - [x] Replace the redundant eight-module catalogue with the canonical 12-stage/109-micro-lesson outline
 - [x] Stage 0 — The Computer Follows Instructions (six complete lessons)
 - [x] Python input infrastructure: repeated interactive prompts and transcript fallback (course introduction is Stage 2)
-- [ ] Stage 1 — Values and Expressions (eight lessons)
+- [x] Stage 1 — Values and Expressions (eight lessons)
 - [ ] Stage 2 — Names, State, and Input (ten lessons)
 - [ ] Stage 3 — Decisions (ten lessons)
 - [ ] Stage 4 — Repetition and Time (ten lessons)
@@ -31,7 +31,7 @@
 
 - Pyodide is loaded from a pinned CDN URL behind the `PythonRunner` boundary so it can be self-hosted later.
 - Curriculum content is plain data: ordered lessons contain ordered steps, short content blocks, and at most one reusable activity per step. The application shell does not know lesson-specific rules.
-- Curriculum stages and lesson data are owned by `src/curriculum/stages/`; generic learning components render activities while progression and assessment operate on typed definitions. Stage 0 is ready. Future stage/lesson IDs and titles mirror the source specification and remain unavailable until their full learning journeys are authored.
+- Curriculum stages and lesson data are owned by `src/curriculum/stages/`; generic learning components render activities while progression and assessment operate on typed definitions. Stages 0 and 1 are ready. Later stage/lesson IDs and titles mirror the source specification and remain unavailable until their full learning journeys are authored.
 - The progress repository accepts the complete curriculum so saved code remains compatible with future lessons while current/completed navigation only uses available lessons.
 - The page uses natural document scrolling with `min-height: 100dvh` rather than trapping the learner in a fixed-height editor workspace.
 - Local UI primitives follow shadcn/ui conventions and are deliberately small for this focused product.
@@ -39,7 +39,7 @@
 - Code activities are assessed on Run; deterministic choice and arrange-code activities assess on response. Prediction and trace activities use real worker execution. Optional reflections are saved but never gate progression.
 - Progress schema v2 stores lesson/step position and each activity's code, response, hint count, and completion. V1 lesson completion/code is migrated to the matching v2 activity IDs.
 - The curriculum now uses `Stage`/`Curriculum.stages` rather than the redundant pre-specification module taxonomy. The aligned original first lesson retains its lesson, step, and activity IDs so existing local progress for that item can still restore.
-- Stage 0 uses existing generic activity primitives. Planned capability work is deliberately staged: learner-filled trace tables before Stage 2; richer AST structural requirements before lessons that assess taught syntax; project requirements and acceptance-test authoring before Stage 10; and a minimal multi-file editor plus durable virtual files before Stage 11.
+- Stages 0 and 1 use generic activity primitives. Stage 1 added a generic expression-reduction content block, output validation for distinct result lines, and an expected-runtime-error assessment that keeps the actual Python error visible. Planned capability work is deliberately staged: learner-filled trace tables before Stage 2; richer AST structural requirements before lessons that assess taught syntax; project requirements and acceptance-test authoring before Stage 10; and a minimal multi-file editor plus durable virtual files before Stage 11.
 
 ## Evidence log
 
@@ -57,11 +57,12 @@
 - Stage 0 assessment uses exact-baseline rejection for the open experiment (so duplicate/reordered output is accepted) and counts actual output rows, including blank rows, for the three-line creation challenge.
 - The old version-1 progress migration continues to preserve compatible first-lesson completion/code and filters removed lesson IDs safely.
 - Curriculum parity tests read `docs/curriculum-01.md` and compare every Stage heading and all 109 ordered micro-lesson headings to the typed outline.
-- Stage 0 verification: 32 unit tests pass; Playwright passes 6 tests with 9 intentional browser-specific skips; lint and TypeScript/build pass. Desktop, iPad landscape, and iPad portrait screenshots were captured and inspected. Vite reports a non-blocking main-chunk size advisory.
+- Stage 0 baseline verification: 32 unit tests passed; Playwright passed 6 tests with 9 intentional browser-specific skips; lint and TypeScript/build passed. Desktop, iPad landscape, and iPad portrait screenshots were captured and inspected.
+- Stage 1 verification: all 37 unit tests pass; Playwright passes 6 tests with 9 intentional browser-specific skips, including the full Stage 0→1 Python journey and Stage 1 expression screenshots in desktop and both iPad orientations; lint and TypeScript/production build pass. Screenshots were inspected. Vite reports only the existing non-blocking main-chunk size advisory.
 
 ## Next stage and capability gates
 
-Implement all eight Stage 1 lessons from `docs/curriculum-01.md`, preserving their order and using a short sequence of generic prediction, observation, and code activities. Before publishing Stage 1, add the non-interactive expression-reduction content primitive required by 1.3; do not try to represent intermediate expression values as fake Python trace frames.
+Stage 1 is fully authored in `src/curriculum/stages/stage-1.ts`; the expression-reduction view is instructional content, while predictions and code activities still execute in real Python. Continue with all ten Stage 2 lessons and add the trace-table interaction before publishing the state-tracing material; do not represent a learner-filled table as a Stage 1-specific page.
 
 Before the stage that needs them, implement and test reusable capabilities rather than lesson-specific components:
 

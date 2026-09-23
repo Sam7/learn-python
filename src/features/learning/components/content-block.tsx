@@ -20,6 +20,22 @@ export function ContentBlockView({ block }: { block: ContentBlock }) {
     return <p className={`max-w-3xl rounded-lg border px-3.5 py-2.5 text-sm leading-6 text-muted ${className}`}>{block.text}</p>
   }
 
+  if (block.type === 'evaluation') {
+    return (
+      <figure className="max-w-3xl rounded-xl border border-line bg-white px-4 py-3 sm:px-5">
+        {block.caption ? <figcaption className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{block.caption}</figcaption> : null}
+        <ol aria-label="Expression evaluation steps" className="space-y-1 font-mono text-sm leading-6 text-ink">
+          {[block.expression, ...block.steps].map((step, index, steps) => (
+            <li key={`${index}-${step}`} className={`flex min-w-0 gap-3 ${index === steps.length - 1 ? 'font-semibold text-teal-dark' : ''}`}>
+              <span aria-hidden="true" className="w-5 shrink-0 text-right text-muted">{index === steps.length - 1 ? '=' : index === 0 ? '·' : '↓'}</span>
+              <code className="min-w-0 overflow-x-auto whitespace-pre">{step}</code>
+            </li>
+          ))}
+        </ol>
+      </figure>
+    )
+  }
+
   return (
     <figure className="max-w-3xl overflow-hidden rounded-xl border border-line bg-white">
       {block.caption ? <figcaption className="border-b border-line/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{block.caption}</figcaption> : null}

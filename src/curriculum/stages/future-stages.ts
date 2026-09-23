@@ -9,21 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 1,
-    title: 'Values and Expressions',
-    description: 'Compare text and numbers, then explore how expressions produce values.',
-    lessons: [
-      'Values',
-      'The computer can calculate',
-      'Expressions collapse into values',
-      'Expressions can contain expressions',
-      'Text can be manipulated too',
-      'Different values allow different operations',
-      'Functions as black boxes',
-      'Expression mini-challenge',
-    ],
-  },
-  {
     order: 2,
     title: 'Names, State, and Input',
     description: 'Name values, see how they change, and receive information.',

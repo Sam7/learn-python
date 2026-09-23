@@ -1,10 +1,11 @@
 import type { Curriculum, LearningActivity, Lesson, LessonStep, Stage } from './types'
 import { futureStages } from './stages/future-stages'
 import { stageZero } from './stages/stage-0'
+import { stageOne } from './stages/stage-1'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, ...futureStages],
+  stages: [stageZero, stageOne, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {

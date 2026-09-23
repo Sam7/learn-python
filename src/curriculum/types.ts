@@ -5,6 +5,7 @@ export type ContentBlock =
   | { type: 'list'; items: string[] }
   | { type: 'callout'; tone: 'tip' | 'note'; text: string }
   | { type: 'example'; code: string; caption?: string }
+  | { type: 'evaluation'; expression: string; steps: string[]; caption?: string }
 
 export interface ActivityBase {
   id: string
@@ -18,6 +19,7 @@ export type OutputExpectation =
   | { mode: 'exact'; lines: string[] }
   | { mode: 'contains'; values: string[] }
   | { mode: 'line-count'; count: number }
+  | { mode: 'distinct-lines'; count: number }
   | { mode: 'non-empty' }
 
 export interface BehaviorTestCase {
@@ -32,6 +34,7 @@ export interface BehaviorTestCase {
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'behavior'; cases: BehaviorTestCase[] }
+  | { kind: 'runtime-error'; exceptionName: string }
   | { kind: 'ast'; requirement: 'text-variable' | 'variable-in-sentence'; rejectOutput?: string[] }
 
 export interface CodeActivity extends ActivityBase {

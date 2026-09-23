@@ -6,10 +6,17 @@ interface ExecutionOutputProps {
   execution: PythonRunResult | null
   isRunning: boolean
   feedback: ValidationResult | null
+  expectedRuntimeError?: string
 }
 
-export function ExecutionOutput({ execution, isRunning, feedback }: ExecutionOutputProps) {
+export function ExecutionOutput({ execution, isRunning, feedback, expectedRuntimeError }: ExecutionOutputProps) {
   const failed = execution?.status === 'error' || execution?.status === 'timeout' || execution?.status === 'cancelled'
+  const expectedErrorObserved = Boolean(
+    expectedRuntimeError
+    && feedback?.passed
+    && execution?.status === 'error'
+    && execution.error?.split('\n').some((line) => line.trimStart().startsWith(`${expectedRuntimeError}:`)),
+  )
 
   return (
     <section className="min-w-0 overflow-hidden rounded-xl border border-line bg-white" aria-label="Python output" aria-live="polite">
@@ -19,8 +26,8 @@ export function ExecutionOutput({ execution, isRunning, feedback }: ExecutionOut
           Output
         </div>
         {isRunning ? <LoaderCircle size={16} className="animate-spin text-teal" aria-label="Python is running" /> : null}
-        {!isRunning && execution?.status === 'success' ? <CheckCircle2 size={16} className="text-teal" aria-label="Run succeeded" /> : null}
-        {!isRunning && failed ? <CircleAlert size={16} className="text-coral" aria-label="Run failed" /> : null}
+        {!isRunning && (execution?.status === 'success' || expectedErrorObserved) ? <CheckCircle2 size={16} className="text-teal" aria-label={expectedErrorObserved ? 'Expected Python error observed' : 'Run succeeded'} /> : null}
+        {!isRunning && failed && !expectedErrorObserved ? <CircleAlert size={16} className="text-coral" aria-label="Run failed" /> : null}
       </div>
 
       <div className="min-h-40 p-3.5 sm:min-h-48">
@@ -32,9 +39,11 @@ export function ExecutionOutput({ execution, isRunning, feedback }: ExecutionOut
           <>
             {execution.stdout ? <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-6 text-ink">{execution.stdout}</pre> : null}
             {failed ? (
-              <div className="mt-2 rounded-lg border border-coral/20 bg-coral/5 p-3">
-                <p className="text-sm font-semibold text-coral">{friendlyError(execution)}</p>
-                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-[#7e3e30]">{execution.error || execution.stderr || 'Python reported an unknown error.'}</pre>
+              <div className={`mt-2 rounded-lg border p-3 ${expectedErrorObserved ? 'border-teal/25 bg-mist' : 'border-coral/20 bg-coral/5'}`}>
+                <p className={`text-sm font-semibold ${expectedErrorObserved ? 'text-teal-dark' : 'text-coral'}`}>
+                  {expectedErrorObserved ? `Python raised ${expectedRuntimeError}, as expected.` : friendlyError(execution)}
+                </p>
+                <pre className={`mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 ${expectedErrorObserved ? 'text-ink' : 'text-[#7e3e30]'}`}>{execution.error || execution.stderr || 'Python reported an unknown error.'}</pre>
               </div>
             ) : !execution.stdout ? (
               <p className="font-mono text-sm text-muted">(no output)</p>
