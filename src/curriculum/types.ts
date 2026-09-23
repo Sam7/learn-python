@@ -17,7 +17,7 @@ export type OutputValidation = {
 
 export type AstValidation = {
   kind: 'ast'
-  requirement: 'text-variable' | 'formatted-output'
+  requirement: 'text-variable' | 'variable-in-sentence'
   reject?: string[]
 }
 

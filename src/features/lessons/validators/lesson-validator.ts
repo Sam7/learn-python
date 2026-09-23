@@ -38,7 +38,7 @@ function validateOutput(lesson: Lesson, context: LessonValidationContext): Valid
     : { passed: false, message: 'Your program needs to print a value.' }
 }
 
-function astValidationProgram(source: string, requirement: 'text-variable' | 'formatted-output'): string {
+function astValidationProgram(source: string, requirement: 'text-variable' | 'variable-in-sentence'): string {
   const sourceLiteral = JSON.stringify(source)
   const requirementCheck = requirement === 'text-variable'
     ? `
@@ -49,15 +49,40 @@ if not has_text_variable:
 if not has_text_variable:
     raise AssertionError("Create a variable containing some text first.")
 
-has_formatted_output = any(
+text_variable_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+    and isinstance(node.value, ast.Constant)
+    and isinstance(node.value.value, str)
+}
+
+def contains_text_variable(node):
+    return any(
+        isinstance(child, ast.Name) and child.id in text_variable_names
+        for child in ast.walk(node)
+    )
+
+def contains_text_literal(node):
+    return any(
+        isinstance(child, ast.Constant)
+        and isinstance(child.value, str)
+        and len(child.value.strip()) > 0
+        for child in ast.walk(node)
+    )
+
+has_variable_in_sentence = any(
     isinstance(node, ast.Call)
     and isinstance(node.func, ast.Name)
     and node.func.id == "print"
-    and any(isinstance(argument, ast.JoinedStr) for argument in node.args)
+    and any(contains_text_variable(argument) for argument in node.args)
+    and any(contains_text_literal(argument) for argument in node.args)
     for node in ast.walk(tree)
 )
-if not has_formatted_output:
-    raise AssertionError("Use an f-string to put your variable inside a sentence.")
+if not has_variable_in_sentence:
+    raise AssertionError("Put your text variable inside a sentence that you print.")
 `
 
   return `
@@ -94,18 +119,18 @@ async function validateAst(lesson: Lesson, context: LessonValidationContext): Pr
   }
 
   const result = await context.runValidationCode(astValidationProgram(context.code, definition.requirement))
-  const isFormattedOutput = definition.requirement === 'formatted-output'
+  const isSentenceOutput = definition.requirement === 'variable-in-sentence'
   return result.status === 'success'
     ? {
         passed: true,
-        message: isFormattedOutput
+        message: isSentenceOutput
           ? 'Great work — you put a variable inside a sentence.'
           : 'Great work — you created and used a variable.',
       }
     : {
         passed: false,
-        message: result.error?.includes('Use an f-string')
-          ? 'Use an f-string to put your variable inside a sentence.'
+        message: result.error?.includes('Put your text variable')
+          ? 'Put your text variable inside a sentence that you print.'
           : result.error?.includes('Create a variable')
           ? 'Create a variable containing text, then print its name.'
           : 'Python could not check that yet. Make sure your code runs first.',

@@ -256,7 +256,12 @@ function App() {
                   <p className="flex items-center gap-2 text-sm font-bold text-teal-dark"><Check size={17} aria-hidden="true" /> Lesson complete</p>
                   <p className="mt-1 text-sm leading-6 text-muted">You can revisit this step any time.</p>
                 </div>
-                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>Next lesson <ChevronRight size={18} aria-hidden="true" /></Button> : <p className="text-sm font-semibold text-teal-dark">More lessons are coming soon.</p>}
+                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>Next lesson <ChevronRight size={18} aria-hidden="true" /></Button> : (
+                  <div className="text-left sm:text-right">
+                    <p className="text-sm font-semibold text-teal-dark">Chapter complete</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">You finished the available fundamentals lessons. More lessons are coming soon.</p>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

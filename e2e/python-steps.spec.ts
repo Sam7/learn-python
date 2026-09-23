@@ -72,7 +72,7 @@ test('the five available fundamentals lessons form a complete progressive path',
     { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths' },
     { code: 'print(12 + 8)', next: 'Remembering things' },
     { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences' },
-    { code: 'favourite_food = "mango"\nprint(f"My favourite food is {favourite_food}.")', next: undefined },
+    { code: 'favourite_food = "mango"\nprint("My favourite food is", favourite_food)', next: undefined },
   ]
 
   for (const lesson of lessonsToComplete) {
@@ -88,7 +88,7 @@ test('the five available fundamentals lessons form a complete progressive path',
     }
   }
 
-  await expect(page.getByText('More lessons are coming soon.')).toBeVisible()
+  await expect(page.getByText('Chapter complete')).toBeVisible()
 })
 
 test('selected code keeps a readable light foreground', async ({ page, browserName }, testInfo) => {

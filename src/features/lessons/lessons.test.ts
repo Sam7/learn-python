@@ -83,7 +83,7 @@ describe('lesson validators', () => {
     expect(inspectedCode).toContain('exec(compile')
   })
 
-  it('requires a variable inside formatted output for the next lesson', async () => {
+  it('requires a variable inside a printed sentence for the next lesson', async () => {
     const lesson = getLessonById('values-in-sentences')!
     let inspectedCode = ''
     const result = await validateLesson(lesson, {
@@ -96,6 +96,17 @@ describe('lesson validators', () => {
     })
 
     expect(result).toEqual({ passed: true, message: 'Great work — you put a variable inside a sentence.' })
-    expect(inspectedCode).toContain('ast.JoinedStr')
+    expect(inspectedCode).toContain('has_variable_in_sentence')
+  })
+
+  it('accepts a printed sentence that passes the variable separately', async () => {
+    const lesson = getLessonById('values-in-sentences')!
+    const result = await validateLesson(lesson, {
+      code: 'food = "mango"\nprint("I like", food)',
+      execution: success('I like mango\n'),
+      runValidationCode: async () => success(''),
+    })
+
+    expect(result.passed).toBe(true)
   })
 })

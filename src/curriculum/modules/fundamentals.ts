@@ -108,7 +108,7 @@ export const fundamentalsModule: Module = {
         'Change the value in the variable to something you like.',
         'Keep the f before the opening quotation mark and put the variable inside {curly brackets}.',
       ],
-      validation: { kind: 'ast', requirement: 'formatted-output', reject: ['I like pizza'] },
+      validation: { kind: 'ast', requirement: 'variable-in-sentence', reject: ['I like pizza'] },
       status: 'ready',
     },
   ],
