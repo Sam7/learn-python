@@ -89,6 +89,9 @@ export async function validateLesson(
   lesson: Lesson,
   context: LessonValidationContext,
 ): Promise<ValidationResult> {
+  if (lesson.validation.kind === 'unavailable') {
+    return { passed: false, message: 'This lesson is coming soon.' }
+  }
   return lesson.validation.kind === 'ast'
     ? validateAst(lesson, context)
     : validateOutput(lesson, context)

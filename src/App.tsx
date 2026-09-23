@@ -4,10 +4,19 @@ import { Button } from './components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
 import { CodeEditor } from './features/lessons/components/code-editor'
+import { CurriculumNavigator } from './features/lessons/components/curriculum-navigator'
 import { HintPanel } from './features/lessons/components/hint-panel'
-import { LessonSidebar } from './features/lessons/components/lesson-sidebar'
 import { OutputPanel } from './features/lessons/components/output-panel'
-import { getLessonById, getNextLesson, lessons } from './features/lessons/lessons'
+import {
+  allLessons,
+  curriculum,
+  getLessonById,
+  getLessonLocation,
+  getNextLesson,
+  getPreviousLesson,
+  getModuleProgress,
+} from './curriculum/curriculum'
+import type { Lesson } from './curriculum/types'
 import { validateLesson } from './features/lessons/validators/lesson-validator'
 import { usePythonRunner } from './features/python/python-runner/use-python-runner'
 import type { PythonRunResult } from './features/python/python-runner/types'
@@ -18,13 +27,13 @@ type WorkflowState = 'idle' | 'executing' | 'executionSucceeded' | 'executionFai
 
 function App() {
   const repository = useMemo(
-    () => createProgressRepository(window.localStorage, lessons),
+    () => createProgressRepository(window.localStorage, allLessons),
     [],
   )
   const initialProgress = useMemo(() => repository.load(), [repository])
   const [progress, setProgress] = useState<LearnerProgress>(initialProgress)
   const [code, setCode] = useState(() => {
-    const initialLesson = getLessonById(initialProgress.currentLessonId) ?? lessons[0]
+    const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
     return initialProgress.lessonCode[initialLesson.id] ?? initialLesson.starterCode
   })
   const [execution, setExecution] = useState<PythonRunResult | null>(null)
@@ -34,9 +43,11 @@ function App() {
   const [visibleHints, setVisibleHints] = useState(0)
   const { run, runtimeStatus, runtimeError } = usePythonRunner()
 
-  const activeLesson = getLessonById(progress.currentLessonId) ?? lessons[0]
+  const activeLesson: Lesson = getLessonById(progress.currentLessonId) ?? allLessons[0]
+  const activeLocation = getLessonLocation(activeLesson.id)
+  const activeModule = activeLocation?.module ?? curriculum.modules[0]
+  const moduleProgress = getModuleProgress(activeModule, progress.completedLessonIds)
   const nextLesson = getNextLesson(activeLesson.id)
-  const completedCount = progress.completedLessonIds.length
   const isBusy = workflow === 'executing' || workflow === 'validating'
   const isCurrentCompleted = progress.completedLessonIds.includes(activeLesson.id)
 
@@ -50,9 +61,9 @@ function App() {
 
   const selectLesson = useCallback((lessonId: string) => {
     const selected = getLessonById(lessonId)
-    if (!selected) return
-    const previousLesson = lessons[selected.order - 2]
-    const canOpen = selected.order === 1 || Boolean(previousLesson && progress.completedLessonIds.includes(previousLesson.id))
+    if (!selected || selected.status !== 'ready') return
+    const previousLesson = getPreviousLesson(selected.id)
+    const canOpen = !previousLesson || progress.completedLessonIds.includes(previousLesson.id)
     if (!canOpen) return
     setCode(progress.lessonCode[lessonId] ?? selected.starterCode)
     setExecution(null)
@@ -124,7 +135,7 @@ function App() {
     if (!window.confirm('Reset your lesson progress and saved code?')) return
     const next = repository.reset()
     setProgress(next)
-    setCode(lessons[0].starterCode)
+    setCode(allLessons[0].starterCode)
     setExecution(null)
     setLastRunCode(null)
     setValidationMessage(null)
@@ -151,9 +162,9 @@ function App() {
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
             <div className="text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.13em] text-muted">Lesson {activeLesson.order} of {lessons.length}</p>
-              <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${completedCount} of ${lessons.length} lessons complete`}>
-                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${(completedCount / lessons.length) * 100}%` }} />
+              <p className="text-xs font-semibold uppercase tracking-[0.13em] text-muted">Module {activeModule.order} · Lesson {activeLesson.order} of {activeModule.lessons.length}</p>
+              <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${moduleProgress.completedCount} of ${moduleProgress.availableCount} available lessons complete`}>
+                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${(moduleProgress.completedCount / moduleProgress.availableCount) * 100}%` }} />
               </div>
             </div>
             <Button type="button" variant="quiet" size="sm" onClick={handleResetProgress} className="hidden sm:inline-flex">
@@ -163,9 +174,9 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1400px] gap-7 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:py-10">
-        <LessonSidebar
-          lessons={lessons}
+      <main className="mx-auto grid max-w-[1400px] gap-7 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:py-10">
+        <CurriculumNavigator
+          curriculum={curriculum}
           currentLessonId={activeLesson.id}
           completedLessonIds={progress.completedLessonIds}
           onSelect={selectLesson}
@@ -175,7 +186,7 @@ function App() {
           <div className="mb-7 max-w-3xl">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge>Step {activeLesson.order}</Badge>
-              <span className="text-sm font-medium text-muted">{activeLesson.concept}</span>
+              <span className="text-sm font-medium text-muted">{activeLesson.summary}</span>
             </div>
             <h1 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.055em] text-ink">{activeLesson.title}</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{activeLesson.explanation.lead}</p>
@@ -245,7 +256,7 @@ function App() {
                   <p className="flex items-center gap-2 text-sm font-bold text-teal-dark"><Check size={17} aria-hidden="true" /> Lesson complete</p>
                   <p className="mt-1 text-sm leading-6 text-muted">You can revisit this step any time.</p>
                 </div>
-                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>Next lesson <ChevronRight size={18} aria-hidden="true" /></Button> : <p className="text-sm font-semibold text-teal-dark">You finished the first four steps!</p>}
+                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>Next lesson <ChevronRight size={18} aria-hidden="true" /></Button> : <p className="text-sm font-semibold text-teal-dark">More lessons are coming soon.</p>}
               </div>
             ) : null}
           </div>

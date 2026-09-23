@@ -121,6 +121,9 @@ export class BrowserPythonRunner implements PythonRunner {
       const timer = setTimeout(() => {
         this.pending.delete(requestId)
         this.restartWorker()
+        // Start rebuilding the runtime immediately. The next Run can then wait
+        // for a warm worker instead of making the learner wait from scratch.
+        void this.prepare().catch(() => undefined)
         resolve({
           status: 'timeout',
           stdout: '',

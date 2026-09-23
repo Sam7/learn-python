@@ -10,11 +10,14 @@
 - [x] Persistence: versioned localStorage repository, restore, reset, migration safety
 - [x] iPad refinement: portrait/landscape layout, scrolling, touch-sized controls
 - [x] Polish and regression: screenshots, accessibility, full test/build/lint review
+- [x] Curriculum refactor: typed curriculum/module model, seven-module pathway, and responsive curriculum navigator
 
 ## Working decisions
 
 - Pyodide is loaded from a pinned CDN URL behind the `PythonRunner` boundary so it can be self-hosted later.
 - Lesson content is plain data plus small named validation definitions; the application shell does not know lesson-specific rules.
+- The curriculum is owned by `src/curriculum/`; the lesson feature consumes it through typed lookup/progression helpers. The first four Module 1 lessons are available and the remaining pathway is structured as future lesson data.
+- The progress repository accepts the complete curriculum so saved code remains compatible with future lessons while current/completed navigation only uses available lessons.
 - The page uses natural document scrolling with `min-height: 100dvh` rather than trapping the learner in a fixed-height editor workspace.
 - Local UI primitives follow shadcn/ui conventions and are deliberately small for this focused product.
 
@@ -26,3 +29,4 @@
 - A controlled-editor lesson reset effect initially overwrote multiline edits; it was replaced with event-driven lesson selection/reset handling.
 - Pyodide's batched stdout callback omits line separators; the worker restores them so multi-line `print()` challenges validate correctly.
 - Chromium and WebKit tablet screenshots were inspected for desktop, iPad landscape, and iPad portrait layouts.
+- The curriculum navigator uses a compact sidebar at desktop/tablet landscape widths and a bottom-sheet lesson chooser at portrait widths. Playwright covers opening and closing the portrait navigator without introducing page overflow.

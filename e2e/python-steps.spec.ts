@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 
 test('desktop learner journey runs Python, checks an answer, and opens the next lesson', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await expect(page.getByRole('heading', { name: 'Saying something' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('print')
   await waitForPython(page)
 
@@ -44,7 +44,7 @@ test('desktop learner journey runs Python, checks an answer, and opens the next 
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-first-lesson.png`, fullPage: true })
   await page.getByRole('button', { name: /Next lesson/ }).click()
-  await expect(page.getByRole('heading', { name: 'Your own text' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
 })
 
 test('refresh restores the active lesson and edited code', async ({ page, browserName }) => {
@@ -55,11 +55,11 @@ test('refresh restores the active lesson and edited code', async ({ page, browse
   await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Hello Python!', { timeout: 20_000 })
   await page.getByRole('button', { name: /Check answer/ }).click()
   await page.getByRole('button', { name: /Next lesson/ }).click()
-  await expect(page.getByRole('heading', { name: 'Your own text' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
   await setEditorCode(page, 'print("Sam")\nprint("books")')
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Your own text' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('books')
 })
 
@@ -68,9 +68,9 @@ test('the four lesson definitions form a complete progressive path', async ({ pa
   await waitForPython(page)
 
   const lessonsToComplete = [
-    { code: 'print("Hello Python!")', next: 'Your own text' },
-    { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and simple maths' },
-    { code: 'print(12 + 8)', next: 'Variables' },
+    { code: 'print("Hello Python!")', next: 'Printing your own text' },
+    { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths' },
+    { code: 'print(12 + 8)', next: 'Remembering things' },
     { code: 'favourite_food = "mango"\nprint(favourite_food)', next: undefined },
   ]
 
@@ -87,7 +87,7 @@ test('the four lesson definitions form a complete progressive path', async ({ pa
     }
   }
 
-  await expect(page.getByText('You finished the first four steps!')).toBeVisible()
+  await expect(page.getByText('More lessons are coming soon.')).toBeVisible()
 })
 
 test('invalid Python gives a useful error and does not complete the lesson', async ({ page, browserName }) => {
@@ -117,7 +117,7 @@ test('an endless loop times out and the run control recovers', async ({ page, br
 
 test('tablet layout stays reachable without horizontal page overflow', async ({ page }, testInfo) => {
   await waitForPython(page)
-  await expect(page.getByRole('heading', { name: 'Saying something' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
   const editor = page.locator('.cm-content')
   await expect(editor).toBeVisible()
   await editor.click()
@@ -133,6 +133,16 @@ test('tablet layout stays reachable without horizontal page overflow', async ({ 
   }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport + 1)
   expect(dimensions.height).toBeGreaterThan(page.viewportSize()?.height ?? 0)
+
+  if ((page.viewportSize()?.width ?? 0) < 1024) {
+    await page.getByRole('button', { name: 'Open curriculum' }).click()
+    const navigatorDialog = page.getByRole('dialog', { name: 'Choose a lesson' })
+    await expect(navigatorDialog).toBeVisible()
+    await expect(navigatorDialog.getByText('Getting Python to do things')).toBeVisible()
+    await page.getByRole('button', { name: 'Close curriculum' }).last().click()
+    await expect(page.getByRole('dialog', { name: 'Choose a lesson' })).toHaveCount(0)
+  }
+
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}.png`, fullPage: true })
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { allLessons } from '../../curriculum/curriculum'
 import { lessons } from '../lessons/lessons'
 import { createInitialProgress, createProgressRepository, normalizeProgress } from './progress-store'
 
@@ -38,6 +39,19 @@ describe('progress persistence', () => {
 
     expect(progress.completedLessonIds).toEqual(['saying-something'])
     expect(progress.lessonCode).toEqual({ 'your-own-text': 'print("hello")' })
+  })
+
+  it('does not restore a future lesson as the active lesson', () => {
+    const progress = normalizeProgress({
+      version: 1,
+      currentLessonId: 'values-in-sentences',
+      completedLessonIds: ['values-in-sentences', 'saying-something'],
+      lessonCode: { 'values-in-sentences': '# saved for later' },
+    }, allLessons)
+
+    expect(progress.currentLessonId).toBe('saying-something')
+    expect(progress.completedLessonIds).toEqual(['saying-something'])
+    expect(progress.lessonCode).toEqual({ 'values-in-sentences': '# saved for later' })
   })
 
   it('saves, loads, and resets through the repository boundary', () => {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { getLessonById, getLessonByOrder, getNextLesson, lessons } from './lessons'
+import {
+  allLessons,
+  curriculum,
+  getLessonById,
+  getLessonLocation,
+  getModuleProgress,
+  getNextLesson,
+  modules,
+  readyLessons,
+} from '../../curriculum/curriculum'
 import { validateLesson } from './validators/lesson-validator'
 import type { PythonRunResult } from '../python/python-runner/types'
 
@@ -11,12 +20,26 @@ const success = (stdout: string): PythonRunResult => ({
 })
 
 describe('lesson catalogue', () => {
-  it('keeps lessons ordered and retrievable by id', () => {
-    expect(lessons.map((lesson) => lesson.order)).toEqual([1, 2, 3, 4])
+  it('keeps modules and lessons ordered and retrievable by id', () => {
+    expect(modules.map((module) => module.order)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(readyLessons.map((lesson) => lesson.order)).toEqual([1, 2, 3, 4])
     expect(getLessonById('your-own-text')?.order).toBe(2)
-    expect(getLessonByOrder(3)?.id).toBe('numbers-and-maths')
+    expect(getLessonLocation('numbers-and-maths')?.module.id).toBe('fundamentals')
     expect(getNextLesson('saying-something')?.id).toBe('your-own-text')
     expect(getNextLesson('variables')).toBeUndefined()
+    expect(allLessons.find((lesson) => lesson.id === 'values-in-sentences')?.status).toBe('coming-soon')
+  })
+
+  it('derives module progress from curriculum data', () => {
+    const fundamentals = curriculum.modules[0]
+    expect(getModuleProgress(fundamentals, ['saying-something', 'your-own-text'])).toEqual({
+      completedCount: 2,
+      availableCount: 4,
+      totalCount: 5,
+      upcomingCount: 1,
+      isComplete: false,
+    })
+    expect(getModuleProgress(fundamentals, readyLessons.map((lesson) => lesson.id)).isComplete).toBe(true)
   })
 })
 
