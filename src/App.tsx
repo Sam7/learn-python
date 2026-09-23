@@ -1,252 +1,27 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { Code2, RotateCcw, Sparkles } from 'lucide-react'
+import { Code2, RotateCcw } from 'lucide-react'
 import { Button } from './components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
-import { CodeEditor } from './features/lessons/components/code-editor'
+import { ActivityRenderer } from './features/learning/components/activity-renderer'
+import { ContentBlockView } from './features/learning/components/content-block'
+import { useLearningSession } from './features/learning/use-learning-session'
 import { CurriculumNavigator } from './features/lessons/components/curriculum-navigator'
 import { LessonActionBar } from './features/lessons/components/lesson-action-bar'
-import { LessonUtilityPanel } from './features/lessons/components/lesson-utility-panel'
-import { InputPanel } from './features/python/components/input-panel'
-import {
-  allLessons,
-  curriculum,
-  getLessonById,
-  getLessonLocation,
-  getNextLesson,
-  getPreviousLesson,
-  getModuleProgress,
-} from './curriculum/curriculum'
-import type { Lesson } from './curriculum/types'
-import { validateLesson } from './features/lessons/validators/lesson-validator'
-import { usePythonRunner } from './features/python/python-runner/use-python-runner'
-import type { PythonInputRequest, PythonRunResult } from './features/python/python-runner/types'
-import { createProgressRepository, type LearnerProgress } from './features/progress/progress-store'
 import './App.css'
 
-type WorkflowState = 'idle' | 'executing' | 'waitingForInput' | 'executionSucceeded' | 'executionFailed' | 'validating' | 'lessonPassed'
-
-interface PendingInput {
-  request: PythonInputRequest
-  resolve: (answer: string) => void
-  reject: (error: Error) => void
-}
-
-function sampleInputText(lesson: Lesson): string {
-  return lesson.sampleInputs?.join('\n') ?? ''
-}
-
 function App() {
-  const repository = useMemo(
-    () => createProgressRepository(window.localStorage, allLessons),
-    [],
-  )
-  const initialProgress = useMemo(() => repository.load(), [repository])
-  const [progress, setProgress] = useState<LearnerProgress>(initialProgress)
-  const [code, setCode] = useState(() => {
-    const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
-    return initialProgress.lessonCode[initialLesson.id] ?? initialLesson.starterCode
-  })
-  const [transcriptValue, setTranscriptValue] = useState(() => {
-    const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
-    return sampleInputText(initialLesson)
-  })
-  const [execution, setExecution] = useState<PythonRunResult | null>(null)
-  const [lastRunCode, setLastRunCode] = useState<string | null>(null)
-  const [lastRunInputKey, setLastRunInputKey] = useState<string | null>(null)
-  const [validationMessage, setValidationMessage] = useState<{ passed: boolean; message: string } | null>(null)
-  const [workflow, setWorkflow] = useState<WorkflowState>('idle')
-  const [visibleHints, setVisibleHints] = useState(0)
-  const [pendingInput, setPendingInput] = useState<PendingInput | null>(null)
-  const [answerValue, setAnswerValue] = useState('')
-  const pendingInputRef = useRef<PendingInput | null>(null)
-  const operationId = useRef(0)
-  const { run, cancel, interactiveInput, runtimeStatus, runtimeError } = usePythonRunner()
-
-  const activeLesson: Lesson = getLessonById(progress.currentLessonId) ?? allLessons[0]
-  const activeLocation = getLessonLocation(activeLesson.id)
-  const activeModule = activeLocation?.module ?? curriculum.modules[0]
-  const moduleProgress = getModuleProgress(activeModule, progress.completedLessonIds)
-  const nextModule = curriculum.modules.find((module) => module.order > activeModule.order)
-  const nextLesson = getNextLesson(activeLesson.id)
-  const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
-  const nextActionLabel = nextLessonLocation
-    ? nextLessonLocation.module.id !== activeModule.id
-      ? 'Next chapter'
-      : 'Next lesson'
-    : 'Next lesson'
-  const isBusy = workflow === 'executing' || workflow === 'waitingForInput' || workflow === 'validating'
-  const isCurrentCompleted = progress.completedLessonIds.includes(activeLesson.id)
-  const currentInputKey = interactiveInput ? 'interactive' : transcriptValue
-  const actionBarStatus = isBusy ? 'busy' : isCurrentCompleted || workflow === 'lessonPassed' ? 'complete' : 'ready'
-
-  const updateProgress = useCallback((update: (current: LearnerProgress) => LearnerProgress) => {
-    setProgress((current) => {
-      const next = update(current)
-      repository.save(next)
-      return next
-    })
-  }, [repository])
-
-  const selectLesson = useCallback((lessonId: string) => {
-    const selected = getLessonById(lessonId)
-    if (!selected || selected.status !== 'ready') return
-    const previousLesson = getPreviousLesson(selected.id)
-    const canOpen = !previousLesson || progress.completedLessonIds.includes(previousLesson.id)
-    if (!canOpen) return
-    operationId.current += 1
-    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
-    pendingInputRef.current = null
-    cancel()
-    setCode(progress.lessonCode[lessonId] ?? selected.starterCode)
-    setTranscriptValue(sampleInputText(selected))
-    setExecution(null)
-    setLastRunCode(null)
-    setLastRunInputKey(null)
-    setValidationMessage(null)
-    setWorkflow('idle')
-    setVisibleHints(0)
-    setPendingInput(null)
-    setAnswerValue('')
-    window.scrollTo({ top: 0, behavior: 'auto' })
-    updateProgress((current) => ({ ...current, currentLessonId: lessonId }))
-  }, [cancel, progress.completedLessonIds, progress.lessonCode, updateProgress])
-
-  const handleCodeChange = (value: string) => {
-    setCode(value)
-    updateProgress((current) => ({
-      ...current,
-      lessonCode: { ...current.lessonCode, [activeLesson.id]: value },
-    }))
-    setValidationMessage(null)
-  }
-
-  const requestInput = useCallback((request: PythonInputRequest) => new Promise<string>((resolve, reject) => {
-    const pending = { request, resolve, reject }
-    pendingInputRef.current = pending
-    setAnswerValue('')
-    setPendingInput(pending)
-    setWorkflow('waitingForInput')
-  }), [])
-
-  const handleInputCancel = useCallback((message: string) => {
-    pendingInputRef.current?.reject(new Error(message))
-    pendingInputRef.current = null
-    setPendingInput(null)
-    setAnswerValue('')
-  }, [])
-
-  const handleSubmitAnswer = () => {
-    if (!pendingInput) return
-    const current = pendingInput
-    pendingInputRef.current = null
-    setPendingInput(null)
-    setAnswerValue('')
-    setWorkflow('executing')
-    current.resolve(answerValue)
-  }
-
-  const handleCancelRun = () => {
-    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
-    pendingInputRef.current = null
-    setPendingInput(null)
-    setAnswerValue('')
-    cancel()
-  }
-
-  const handleRun = async () => {
-    const currentOperation = ++operationId.current
-    setWorkflow('executing')
-    setValidationMessage(null)
-    const input = interactiveInput
-      ? { mode: 'interactive' as const }
-      : { mode: 'transcript' as const, lines: transcriptValue.length ? transcriptValue.split('\n') : [] }
-    const result = await run(
-      { code, input },
-      interactiveInput ? { onInputRequest: requestInput, onInputCancel: handleInputCancel } : undefined,
-    )
-    if (currentOperation !== operationId.current) return
-    setExecution(result)
-    setLastRunCode(code)
-    setLastRunInputKey(currentInputKey)
-    pendingInputRef.current = null
-    setPendingInput(null)
-    setWorkflow(result.status === 'success' ? 'executionSucceeded' : 'executionFailed')
-  }
-
-  const handleCheck = async () => {
-    if (!execution || lastRunCode !== code || lastRunInputKey !== currentInputKey) {
-      setValidationMessage({ passed: false, message: 'Run this version of your code before checking it.' })
-      return
-    }
-    const currentOperation = ++operationId.current
-    setWorkflow('validating')
-    const result = await validateLesson(activeLesson, {
-      code,
-      execution,
-      runValidationCode: async (validationCode, request) => run({ code: validationCode, ...request }),
-    })
-    if (currentOperation !== operationId.current) return
-    setValidationMessage(result)
-    if (result.passed) {
-      updateProgress((current) => ({
-        ...current,
-        completedLessonIds: current.completedLessonIds.includes(activeLesson.id)
-          ? current.completedLessonIds
-          : [...current.completedLessonIds, activeLesson.id],
-      }))
-      setWorkflow('lessonPassed')
-    } else {
-      setWorkflow(execution.status === 'success' ? 'executionSucceeded' : 'executionFailed')
-    }
-  }
-
-  const handleResetCode = () => {
-    setCode(activeLesson.starterCode)
-    setTranscriptValue(sampleInputText(activeLesson))
-    updateProgress((current) => {
-      const nextCode = { ...current.lessonCode }
-      delete nextCode[activeLesson.id]
-      return { ...current, lessonCode: nextCode }
-    })
-    setExecution(null)
-    setLastRunCode(null)
-    setLastRunInputKey(null)
-    setValidationMessage(null)
-    setWorkflow('idle')
-    setVisibleHints(0)
-    setPendingInput(null)
-    setAnswerValue('')
-  }
+  const session = useLearningSession()
+  const { activeLesson, activeModule, activeStep, activity } = session
+  const stepNumber = session.stepIndex + 1
 
   const handleResetProgress = () => {
-    if (!window.confirm('Reset your lesson progress and saved code?')) return
-    operationId.current += 1
-    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
-    pendingInputRef.current = null
-    cancel()
-    const next = repository.reset()
-    setProgress(next)
-    setCode(allLessons[0].starterCode)
-    setTranscriptValue(sampleInputText(allLessons[0]))
-    setExecution(null)
-    setLastRunCode(null)
-    setLastRunInputKey(null)
-    setValidationMessage(null)
-    setWorkflow('idle')
-    setVisibleHints(0)
-    setPendingInput(null)
-    setAnswerValue('')
-  }
-
-  const handleNextLesson = () => {
-    if (nextLesson) selectLesson(nextLesson.id)
+    if (!window.confirm('Reset your lesson progress and saved work?')) return
+    session.resetProgress()
   }
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-paper text-ink">
       <header className="sticky top-0 z-20 border-b border-line/80 bg-paper/95 backdrop-blur-md">
-        <div className="mx-auto flex min-h-[68px] max-w-[1400px] items-center justify-between gap-4 px-5 py-3 sm:px-8 lg:px-10">
+        <div className="mx-auto flex min-h-[68px] max-w-[1600px] items-center justify-between gap-3 px-4 py-2.5 sm:px-7 lg:px-10">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-xl bg-ink text-mist shadow-sm" aria-hidden="true">
               <Code2 size={19} strokeWidth={2.2} />
@@ -257,122 +32,88 @@ function App() {
             </div>
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
-            <div className="text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.13em] text-muted">Module {activeModule.order} · Lesson {activeLesson.order} of {activeModule.lessons.length}</p>
-              <div className="mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${moduleProgress.completedCount} of ${moduleProgress.availableCount} available lessons complete`}>
-                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${(moduleProgress.completedCount / moduleProgress.availableCount) * 100}%` }} />
+            <div className="max-w-[12rem] text-right sm:max-w-none">
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-muted sm:text-xs sm:tracking-[0.13em]">
+                Module {activeModule.order} · Lesson {activeLesson.order} of {activeModule.lessons.length}
+              </p>
+              <div className="ml-auto mt-1.5 h-1.5 w-24 overflow-hidden rounded-full bg-line sm:w-32" aria-label={`${session.moduleProgress.completedCount} of ${session.moduleProgress.availableCount} available lessons complete`}>
+                <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${session.moduleProgress.availableCount ? session.moduleProgress.completedCount / session.moduleProgress.availableCount * 100 : 0}%` }} />
               </div>
               <p className="mt-1 hidden text-[10px] leading-4 text-muted/60 sm:block">Nothing leaves this browser · progress saved on this device.</p>
             </div>
-            <Button type="button" variant="quiet" size="sm" onClick={handleResetProgress} className="hidden sm:inline-flex">
+            <Button type="button" variant="quiet" size="sm" onClick={handleResetProgress} className="hidden min-h-10 sm:inline-flex">
               <RotateCcw size={15} aria-hidden="true" /> Reset
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-0 lg:grid-cols-[auto_minmax(0,1fr)_minmax(280px,330px)]">
+      <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-0 lg:grid-cols-[auto_minmax(0,1fr)]">
         <CurriculumNavigator
           key={activeModule.id}
-          curriculum={curriculum}
+          curriculum={session.curriculum}
           currentLessonId={activeLesson.id}
-          completedLessonIds={progress.completedLessonIds}
-          onSelect={selectLesson}
+          completedLessonIds={session.completedLessonIds}
+          onSelect={session.selectLesson}
         />
 
-        <section className="min-w-0 px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-7">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge>Step {activeLesson.order}</Badge>
+        <section className="min-w-0 px-4 pb-8 pt-5 sm:px-7 sm:pt-7 lg:px-10 lg:pb-10 lg:pt-8">
+          <div className="mx-auto w-full max-w-[1180px]">
+            <div className="mb-5 sm:mb-7">
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                <Badge>Lesson {activeLesson.order} · Step {stepNumber}</Badge>
                 <span className="text-sm font-medium text-muted">{activeLesson.summary}</span>
               </div>
-              <h1 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.055em] text-ink">{activeLesson.title}</h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{activeLesson.explanation.lead}</p>
-              {activeLesson.explanation.notes?.length ? (
-                <ul className="mt-3 space-y-1 text-sm leading-6 text-muted">
-                  {activeLesson.explanation.notes.map((note) => <li key={note} className="before:mr-2 before:text-teal before:content-['•']">{note}</li>)}
-                </ul>
-              ) : null}
+              <h1 className="font-display text-[clamp(2rem,5vw,3.35rem)] font-bold leading-[1.04] tracking-[-0.055em] text-ink">{activeLesson.title}</h1>
+              {activeStep?.content.length === 0 ? <p className="mt-3 text-sm text-muted">{activeLesson.learningGoal}</p> : null}
             </div>
 
-          <div className="grid max-w-4xl gap-5">
-            {activeLesson.exampleCode ? (
-              <Card className="overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-line/80 py-4">
-                  <CardTitle className="text-sm uppercase tracking-[0.14em] text-muted">Example</CardTitle>
-                  <span className="font-mono text-xs text-muted">Python</span>
-                </CardHeader>
-                <CardContent className="bg-[#f7faf8] py-4 sm:py-5">
-                  <pre className="overflow-x-auto whitespace-pre font-mono text-sm leading-7 text-ink"><code>{activeLesson.exampleCode}</code></pre>
-                </CardContent>
-              </Card>
-            ) : null}
+            <div className="space-y-4">
+              {activeStep?.content.map((block, index) => <ContentBlockView key={`${activeStep.id}-${index}`} block={block} />)}
 
-            <Card className="border-teal/20 shadow-[0_10px_35px_rgba(40,127,120,0.07)]">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-teal" aria-hidden="true"><Sparkles size={16} /></div>
-                    <div>
-                      <CardTitle>Try it yourself</CardTitle>
-                      <p className="mt-1 text-sm leading-6 text-muted">{activeLesson.task}</p>
-                    </div>
-                  </div>
-                  <Button type="button" variant="quiet" size="sm" onClick={handleResetCode} disabled={isBusy} className="shrink-0">
-                    <RotateCcw size={15} aria-hidden="true" /> Reset code
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <label htmlFor="python-editor" className="sr-only">Your Python code</label>
-                <InputPanel
-                  interactive={interactiveInput}
-                  transcriptValue={transcriptValue}
-                  onTranscriptChange={(value) => {
-                    setTranscriptValue(value)
-                    setValidationMessage(null)
-                  }}
-                  pendingRequest={pendingInput?.request ?? null}
-                  answerValue={answerValue}
-                  onAnswerChange={setAnswerValue}
-                  onSubmitAnswer={handleSubmitAnswer}
-                  onCancelRun={handleCancelRun}
+              {activity ? (
+                <ActivityRenderer
+                  key={activity.id}
+                  activity={activity}
+                  response={session.response}
+                  onResponseChange={session.changeResponse}
+                  onAssessResponse={session.assessResponse}
+                  code={session.code}
+                  onCodeChange={session.changeCode}
+                  onResetCode={session.resetCode}
+                  onRun={session.runActivity}
+                  isRunning={session.isRunning}
+                  runtimeReady={session.runtimeReady}
+                  runtimeError={session.runtimeError}
+                  execution={session.execution}
+                  feedback={session.feedback}
+                  hintsRevealed={session.hintsRevealed}
+                  onRevealHint={session.revealHint}
+                  onCompleteTrace={session.completeTrace}
+                  input={session.inputInteraction}
                 />
-                <div id="python-editor">
-                  <CodeEditor value={code} onChange={handleCodeChange} />
-                </div>
-                {runtimeStatus === 'error' && runtimeError ? <p className="mt-3 text-sm text-coral" role="alert">{runtimeError}</p> : null}
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">Take a moment to read this step, then continue when you are ready.</div>
+              )}
             </div>
           </div>
-
         </section>
-
-        <LessonUtilityPanel
-          key={activeLesson.id}
-          execution={execution}
-          isRunning={workflow === 'executing'}
-          validationMessage={validationMessage}
-          hints={activeLesson.hints}
-          visibleHints={visibleHints}
-          onRevealHint={() => setVisibleHints((count) => Math.min(count + 1, activeLesson.hints.length))}
-        />
       </main>
 
       <LessonActionBar
-        status={actionBarStatus}
-        runtimeStatus={runtimeStatus}
-        isBusy={isBusy}
-        hasNextLesson={Boolean(nextLesson) && isCurrentCompleted}
-        nextActionLabel={nextActionLabel}
-        nextModuleTitle={nextModule?.title}
-        onRun={handleRun}
-        onCheck={handleCheck}
-        onNext={handleNextLesson}
+        stepIndex={session.stepIndex}
+        totalSteps={session.totalSteps}
+        completedActivities={session.completedRequiredActivities}
+        requiredActivities={session.requiredActivities}
+        canGoPrevious={session.canGoPrevious}
+        canGoNext={session.canGoNext}
+        nextLabel={session.nextLabel}
+        isBusy={session.isBusy}
+        isLessonComplete={session.isLessonDone}
+        runtimeStatus={session.runtimeStatus}
+        onPrevious={session.goPrevious}
+        onNext={session.goNext}
       />
-
     </div>
   )
 }

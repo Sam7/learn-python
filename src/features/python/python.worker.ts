@@ -1,6 +1,7 @@
 import { INPUT_STATUS, waitForInput } from './python-runner/input-channel'
 import type { WorkerRequest, WorkerResponse } from './python-runner/protocol'
 import type { PythonInputTranscriptEntry } from './python-runner/types'
+import type { PythonTraceFrame, PythonTraceValue } from './python-runner/types'
 
 const PYODIDE_VERSION = '0.27.5'
 const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
@@ -8,6 +9,11 @@ const PYODIDE_MODULE_URL = `${PYODIDE_INDEX_URL}pyodide.mjs`
 
 interface PyodideGlobals {
   set(name: string, value: unknown): void
+}
+
+interface PyProxyValue {
+  toJs(options?: { dict_converter?: (entries: Iterable<[string, unknown]>) => unknown }): unknown
+  destroy?(): void
 }
 
 interface PyodideRuntime {
@@ -91,9 +97,25 @@ function nextInput(context: RunContext, prompt: string): string | undefined {
   return answer
 }
 
-function wrappedLearnerCode(code: string): string {
+function wrappedLearnerCode(code: string, trace: boolean): string {
+  const tracingSetup = trace ? `
+import sys as __python_steps_sys
+
+def __python_steps_trace(frame, event, arg):
+    if frame.f_code.co_filename == "<learner>" and event in ("line", "return"):
+        __python_steps_capture(frame.f_lineno, event, frame.f_locals)
+    return __python_steps_trace
+
+__python_steps_previous_trace = __python_steps_sys.gettrace()
+__python_steps_sys.settrace(__python_steps_trace)
+` : ''
+  const tracingCleanup = trace ? `
+    __python_steps_sys.settrace(__python_steps_previous_trace)
+` : ''
+
   return `
 import builtins as __python_steps_builtins
+${tracingSetup}
 
 def __python_steps_input(prompt=""):
     value = __python_steps_next_input(prompt)
@@ -107,13 +129,52 @@ try:
     exec(compile(${JSON.stringify(code)}, "<learner>", "exec"), {})
 finally:
     __python_steps_builtins.input = __python_steps_original_input
+${tracingCleanup}
 `
 }
 
-async function runPython(requestId: number, code: string, input: Extract<WorkerRequest, { type: 'run' }>['input']) {
+function traceValue(value: unknown, depth = 0): PythonTraceValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return typeof value === 'string' ? value.slice(0, 120) : value
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : String(value)
+  if (depth >= 2) return String(value).slice(0, 120)
+  if (Array.isArray(value)) return value.slice(0, 12).map((item) => traceValue(item, depth + 1))
+  if (typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).slice(0, 12).map(([key, item]) => [key, traceValue(item, depth + 1)]))
+  }
+  return String(value).slice(0, 120)
+}
+
+function plainLocals(value: unknown): Record<string, PythonTraceValue> {
+  let converted = value
+  const proxy = value as Partial<PyProxyValue> | null
+  if (proxy && typeof proxy.toJs === 'function') {
+    try {
+      converted = proxy.toJs({ dict_converter: (entries) => Object.fromEntries(entries) })
+    } finally {
+      proxy.destroy?.()
+    }
+  }
+  if (!converted || typeof converted !== 'object' || Array.isArray(converted)) return {}
+  return Object.fromEntries(
+    Object.entries(converted as Record<string, unknown>)
+      .filter(([name]) => !name.startsWith('__'))
+      .slice(0, 24)
+      .map(([name, item]) => [name, traceValue(item)]),
+  )
+}
+
+async function runPython(
+  requestId: number,
+  code: string,
+  input: Extract<WorkerRequest, { type: 'run' }>['input'],
+  trace: boolean,
+) {
   const startedAt = performance.now()
   const stdout: string[] = []
   const stderr: string[] = []
+  const traceFrames: PythonTraceFrame[] = []
   const context: RunContext = {
     requestId,
     input,
@@ -124,10 +185,15 @@ async function runPython(requestId: number, code: string, input: Extract<WorkerR
   try {
     const pyodide = await getRuntime()
     pyodide.globals.set('__python_steps_next_input', (prompt: string) => nextInput(context, prompt))
+    if (trace) {
+      pyodide.globals.set('__python_steps_capture', (line: number, event: PythonTraceFrame['event'], locals: unknown) => {
+        if (traceFrames.length < 600) traceFrames.push({ line, event, locals: plainLocals(locals) })
+      })
+    }
     pyodide.setStdin({ stdin: () => nextInput(context, '') })
     pyodide.setStdout({ batched: (text) => stdout.push(`${text}\n`) })
     pyodide.setStderr({ batched: (text) => stderr.push(`${text}\n`) })
-    await pyodide.runPythonAsync(wrappedLearnerCode(code))
+    await pyodide.runPythonAsync(wrappedLearnerCode(code, trace))
     self.postMessage({
       type: 'run-result',
       requestId,
@@ -135,6 +201,7 @@ async function runPython(requestId: number, code: string, input: Extract<WorkerR
       stdout: stdout.join(''),
       stderr: stderr.join(''),
       inputTranscript: context.inputTranscript,
+      ...(trace ? { traceFrames } : {}),
       durationMs: Math.round(performance.now() - startedAt),
     } satisfies WorkerResponse)
   } catch (error) {
@@ -146,6 +213,7 @@ async function runPython(requestId: number, code: string, input: Extract<WorkerR
       stdout: stdout.join(''),
       stderr: stderr.join(''),
       inputTranscript: context.inputTranscript,
+      ...(trace ? { traceFrames } : {}),
       error: errorMessage(error),
       durationMs: Math.round(performance.now() - startedAt),
     } satisfies WorkerResponse)
@@ -154,7 +222,7 @@ async function runPython(requestId: number, code: string, input: Extract<WorkerR
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (event.data.type === 'run') {
-    void runPython(event.data.requestId, event.data.code, event.data.input)
+    void runPython(event.data.requestId, event.data.code, event.data.input, event.data.trace)
     return
   }
 

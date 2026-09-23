@@ -98,6 +98,7 @@ export class BrowserPythonRunner implements PythonRunner {
         stdout: message.stdout,
         stderr: message.stderr,
         inputTranscript: message.inputTranscript,
+        traceFrames: message.traceFrames,
         error: message.error,
         durationMs: message.durationMs,
       })
@@ -208,7 +209,7 @@ export class BrowserPythonRunner implements PythonRunner {
       }
       this.pending.set(id, pending)
       this.scheduleTimeout(id, request.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-      worker.postMessage({ type: 'run', requestId: id, code: request.code, input })
+      worker.postMessage({ type: 'run', requestId: id, code: request.code, input, trace: request.trace ?? false })
     })
   }
 

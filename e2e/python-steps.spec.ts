@@ -1,13 +1,12 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-async function waitForPython(page: import('@playwright/test').Page) {
-  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled({ timeout: 60_000 })
+async function waitForPython(page: Page) {
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled({ timeout: 60_000 })
 }
 
-async function setEditorCode(page: import('@playwright/test').Page, code: string) {
+async function setEditorCode(page: Page, code: string) {
   const editor = page.locator('.cm-content')
   await editor.click()
-  await editor.focus()
   const selectAllShortcut = await page.evaluate(() => /Mac|iPad/.test(navigator.platform) ? 'Meta+A' : 'Control+A')
   await page.keyboard.press(selectAllShortcut)
   await page.keyboard.press('Backspace')
@@ -16,284 +15,205 @@ async function setEditorCode(page: import('@playwright/test').Page, code: string
     await page.keyboard.insertText(line)
     if (index < lines.length - 1) await page.keyboard.press('Enter')
   }
-  for (const line of code.split('\n')) {
-    await expect(editor).toContainText(line)
-  }
+  for (const line of lines) await expect(editor).toContainText(line)
 }
 
-async function answerLivePrompt(page: import('@playwright/test').Page, value: string, answerNumber = 1) {
+async function runAndExpectPass(page: Page, code: string) {
+  await waitForPython(page)
+  await setEditorCode(page, code)
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('Great work', { timeout: 20_000 })
+}
+
+async function answerLivePrompt(page: Page, value: string, answerNumber: number) {
   const answer = page.getByRole('textbox', { name: `Answer ${answerNumber}` })
   await expect(answer).toBeVisible()
   await answer.fill(value)
   await page.getByRole('button', { name: /Send answer/ }).click()
 }
 
+async function capture(page: Page, testInfo: TestInfo, label: string) {
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-${label}.png`, fullPage: false })
+}
+
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    if (window.location.search.includes('transcript-fallback')) {
-      Object.defineProperty(window, 'crossOriginIsolated', { configurable: true, value: false })
-    }
-  })
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 })
 
-test('desktop learner journey runs Python, checks an answer, and opens the next lesson', async ({ page, browserName }, testInfo) => {
-  test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+test('code runs, feedback grades immediately, progress saves, and the next lesson opens', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The full Python journey runs in Chromium; WebKit is reserved for tablet layout and focus checks.')
   await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('print')
   await expect(page.getByText('Nothing leaves this browser · progress saved on this device.')).toBeVisible()
-  await expect(page.locator('footer')).toHaveCount(0)
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Check answer' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Reset code' })).toBeVisible()
-  const fundamentalsToggle = page.getByRole('button', { name: /Getting Python to do things/ })
-  const inputToggle = page.getByRole('button', { name: /Talking to the user/ })
-  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
-  await inputToggle.click()
-  await expect(inputToggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'false')
-  await fundamentalsToggle.click()
-  await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(inputToggle).toHaveAttribute('aria-expanded', 'false')
-  await page.getByRole('button', { name: 'Collapse lesson navigation' }).click()
-  await expect(page.getByRole('button', { name: 'Expand lesson navigation' })).toBeVisible()
-  await page.getByRole('button', { name: 'Expand lesson navigation' }).click()
-  await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
-  await expect(page.getByRole('tab', { name: 'Output' })).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('tab', { name: 'Hint' }).click()
-  await expect(page.getByRole('tabpanel', { name: 'Hint' })).toContainText('Need a hint')
-  await page.getByRole('tab', { name: 'Output' }).click()
-  await expect(page.getByRole('tabpanel', { name: 'Output' })).toContainText('Run your code')
-  await expect(page.getByRole('tabpanel', { name: 'Output' }).getByRole('heading', { name: 'Output' })).toHaveCount(0)
-  await waitForPython(page)
+  await expect(page.getByRole('progressbar', { name: 'Required task progress' })).toHaveAttribute('aria-valuenow', '0')
 
-  await setEditorCode(page, 'print("Hello Python!")')
-  await page.getByRole('button', { name: /Run code/ }).click()
   const output = page.getByRole('region', { name: 'Python output' })
-  await expect(output).toContainText('Hello Python!', { timeout: 20_000 })
-  await page.getByRole('button', { name: /Check answer/ }).click()
-  await expect(page.getByRole('status')).toContainText('Great work')
-  await expect(page.getByText('Lesson complete')).toBeVisible()
+  await expect(output).toContainText('Run the task to see what Python says.')
+  await page.getByRole('button', { name: 'Show a hint' }).click()
+  await expect(page.getByText('Keep print() and change the words inside the quotation marks.')).toBeVisible()
+  await capture(page, testInfo, 'desktop')
 
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-first-lesson.png`, fullPage: true })
-  await page.getByRole('button', { name: /Next lesson/ }).click()
+  await runAndExpectPass(page, 'message = "Hello Python!"\nprint(message)')
+  await expect(output).toContainText('Hello Python!')
+  await expect(output).toContainText('Great work — your program behaves as requested.')
+  await expect(page.getByRole('progressbar', { name: 'Required task progress' })).toHaveAttribute('aria-valuenow', '1')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
   await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
-})
-
-test('refresh restores the active lesson and edited code', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await waitForPython(page)
-  await setEditorCode(page, 'print("Hello Python!")')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Hello Python!', { timeout: 20_000 })
-  await page.getByRole('button', { name: /Check answer/ }).click()
-  await page.getByRole('button', { name: /Next lesson/ }).click()
-  await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
-  await setEditorCode(page, 'print("Sam")\nprint("books")')
+  await setEditorCode(page, 'print("My name is Ada")\nprint("I like drawing")')
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Printing your own text' })).toBeVisible()
-  await expect(page.locator('.cm-content')).toContainText('books')
+  await expect(page.locator('.cm-content')).toContainText('I like drawing')
+  await runAndExpectPass(page, 'print("My name is Ada")\nprint("I like drawing")')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeEnabled()
 })
 
-test('the available learning path reaches the next chapter', async ({ page, browserName }, testInfo) => {
-  test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+test('a lesson can contain multiple gated activities and resets the editor to its starter code', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Curriculum content execution is covered in Chromium.')
+  await runAndExpectPass(page, 'print("Hello Python!")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await runAndExpectPass(page, 'print("Ada")\nprint("drawing")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await expect(page.getByRole('heading', { name: 'Numbers and maths' })).toBeVisible()
+
+  const prediction = page.getByRole('textbox', { name: 'Your output prediction' })
+  await prediction.fill('5')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 5.', { timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next step' }).click()
+
+  const editor = page.locator('.cm-content')
+  await expect(editor).toContainText('print(2 + 3)')
+  await setEditorCode(page, 'print(3)')
+  await page.getByRole('button', { name: 'Reset code' }).click()
+  await expect(editor).toContainText('print(2 + 3)')
+  await runAndExpectPass(page, 'print(12 + 8)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await expect(page.getByRole('heading', { name: 'Remembering things' })).toBeVisible()
+})
+
+test('invalid Python and runaway code show useful feedback and recover', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Runtime failure cases execute in Chromium.')
+  test.setTimeout(40_000)
   await waitForPython(page)
+  const output = page.getByRole('region', { name: 'Python output' })
 
-  const lessonsToComplete = [
-    { code: 'print("Hello Python!")', next: 'Printing your own text', button: 'Next lesson' },
-    { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths', button: 'Next lesson' },
-    { code: 'print(12 + 8)', next: 'Remembering things', button: 'Next lesson' },
-    { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences', button: 'Next lesson' },
-    { code: 'favourite_food = "mango"\nprint("My favourite food is", favourite_food)', next: 'Asking a question', button: 'Next chapter' },
-    { code: 'name = input("What is your name? ")\nprint("Hello", name)', inputs: ['Sam'], next: 'Asking more than one question', button: 'Next lesson' },
-    { code: 'first = input("First? ")\nsecond = input("Second? ")\nprint(first, second)', inputs: ['Sam', 'noodles'], next: 'Using an answer more than once', button: 'Next lesson' },
-    { code: 'name = input("Name? ")\nprint("Hello", name)\nprint("Welcome", name)', inputs: ['Sam'], next: 'Get to know you', button: 'Next lesson' },
-    { code: 'name = input("Name? ")\nhobby = input("Hobby? ")\nfood = input("Food? ")\nprint(name)\nprint(hobby)\nprint(food)', inputs: ['Sam', 'drawing', 'noodles'], next: undefined, button: undefined },
-  ]
+  await setEditorCode(page, 'print("Hello Python!"')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(output).toContainText('Python couldn’t run this yet.', { timeout: 20_000 })
+  await expect(output).toContainText('SyntaxError')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
 
-  for (const lesson of lessonsToComplete) {
-    await setEditorCode(page, lesson.code)
-    await page.getByRole('button', { name: /Run code/ }).click()
-    if (lesson.inputs) {
-      for (const [index, input] of lesson.inputs.entries()) {
-        await answerLivePrompt(page, input, index + 1)
-      }
-    }
-    const lessonOutput = page.getByRole('region', { name: 'Python output' })
-    await expect(lessonOutput).toContainText(/.+/, { timeout: 20_000 })
-    await page.getByRole('button', { name: /Check answer/ }).click()
-    await expect(page.getByRole('status')).toContainText('Great work')
-    if (lesson.next) {
-      await page.getByRole('button', { name: new RegExp(lesson.button ?? 'Next lesson') }).click()
-      await expect(page.getByRole('heading', { name: lesson.next })).toBeVisible()
-      if (lesson.button === 'Next chapter') {
-        await expect(page.locator('.cm-content')).toContainText('input')
-        await expect(page.locator('.cm-content')).not.toContainText('favourite_food')
-        await page.reload()
-        await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
-        const completedModule = page.getByRole('button', { name: /Getting Python to do things/ })
-        await expect(completedModule).toHaveAttribute('aria-expanded', 'false')
-        await completedModule.click()
-        await expect(completedModule).toHaveAttribute('aria-expanded', 'true')
-        await expect(page.getByRole('button', { name: 'Hello Python' })).toBeVisible()
-        await page.getByRole('button', { name: 'Hello Python' }).click()
-        await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
-        await page.getByRole('button', { name: /Talking to the user/ }).click()
-        await page.getByRole('button', { name: 'Ask a question' }).click()
-        await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
-        await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-next-chapter.png`, fullPage: true })
-      }
-    }
-  }
-
-  await expect(page.getByText('Chapter complete')).toBeVisible()
-  await expect(page.getByText('Types and numbers is the next chapter.')).toBeVisible()
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-input-chapter-complete.png`, fullPage: true })
+  await setEditorCode(page, 'while True:\n    pass')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(output).toContainText('endless loop', { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled()
+  await setEditorCode(page, 'print("recovered")')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(output).toContainText('recovered', { timeout: 15_000 })
 })
 
-test('interactive input supports multiple prompts and line reads', async ({ page, browserName }, testInfo) => {
-  test.skip(browserName !== 'chromium', 'Interactive stdin is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+test('interactive Python input supports multiple answers without echoing them into output', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Python input behaviour executes in Chromium.')
+  test.setTimeout(90_000)
+  await runAndExpectPass(page, 'print("Hello Python!")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await runAndExpectPass(page, 'print("Ada")\nprint("drawing")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('5')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 5.')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'print(12 + 8)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('radio', { name: '20' }).check()
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Yes — score is 20 after line 2.', { timeout: 20_000 })
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'favourite_food = "mango"\nprint(favourite_food)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+  await runAndExpectPass(page, 'food = "mango"\nprint(f"I like {food}")')
+  await page.getByRole('button', { name: 'Next chapter' }).click()
+  await expect(page.getByRole('heading', { name: 'Asking a question' })).toBeVisible()
+
   await waitForPython(page)
   await setEditorCode(page, 'first = input("First? ")\nsecond = input("Second? ")\nprint(first)\nprint(second)')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python is waiting for input' })).toBeVisible()
-  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-input-prompt.png`, fullPage: false })
-  await answerLivePrompt(page, 'Ada')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await answerLivePrompt(page, 'Ada', 1)
   await answerLivePrompt(page, 'Python', 2)
   const output = page.getByRole('region', { name: 'Python output' })
-  await expect(output).not.toContainText('First? Ada')
-  await expect(output).not.toContainText('Second? Python')
   await expect(output).toContainText('Ada')
   await expect(output).toContainText('Python')
-
-  await setEditorCode(page, 'import sys\nfirst = sys.stdin.readline().strip()\nsecond = sys.stdin.readline().strip()\nprint(first, second)')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await answerLivePrompt(page, 'one')
-  await answerLivePrompt(page, 'two', 2)
-  await expect(output).toContainText('one two')
+  await expect(output).not.toContainText('First? Ada')
+  await expect(output).not.toContainText('Second? Python')
 })
 
-test('an interactive run can be cancelled while waiting for input', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Interactive cancellation is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await waitForPython(page)
-  await setEditorCode(page, 'name = input("Your name? ")\nprint(name)')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python is waiting for input' })).toBeVisible()
-  await page.getByRole('button', { name: /Cancel/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('cancelled')
-  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled()
-
-  await setEditorCode(page, 'print("recovered")')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('recovered', { timeout: 15_000 })
-})
-
-test('transcript input fallback supports multiple answers', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Fallback stdin is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await page.goto('/?transcript-fallback')
-  await waitForPython(page)
-  await expect(page.getByRole('textbox', { name: 'Program input' })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Program input' }).fill('one\ntwo')
-  await setEditorCode(page, 'import sys\nfirst = sys.stdin.readline().strip()\nsecond = sys.stdin.readline().strip()\nprint(first, second)')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('one two', { timeout: 20_000 })
-})
-
-test('transcript input explains when Python needs another answer', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Fallback EOF is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await page.goto('/?transcript-fallback')
-  await waitForPython(page)
-  await page.getByRole('textbox', { name: 'Program input' }).fill('only one')
-  await setEditorCode(page, 'first = input("First? ")\nsecond = input("Second? ")\nprint(first, second)')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  const output = page.getByRole('region', { name: 'Python output' })
-  await expect(output).toContainText('Python asked for another answer', { timeout: 20_000 })
-  await expect(output).toContainText('EOF when reading a line')
-})
-
-test('selected code keeps a readable light foreground', async ({ page, browserName }, testInfo) => {
-  test.skip(browserName !== 'chromium', 'Selection styling is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  const editor = page.locator('.cm-content')
-  await editor.click()
-  await page.keyboard.press('Control+A')
-  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-code-selection.png`, fullPage: false })
-
-  const selectionStyles = await page.evaluate(() => {
-    const editorElement = document.querySelector('.cm-content')
-    if (!editorElement) return null
-    const style = getComputedStyle(editorElement, '::selection')
-    return { color: style.color, backgroundColor: style.backgroundColor }
-  })
-
-  expect(selectionStyles).toEqual({ color: 'rgb(232, 243, 239)', backgroundColor: 'rgb(40, 127, 120)' })
-})
-
-test('invalid Python gives a useful error and does not complete the lesson', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  await waitForPython(page)
-  await setEditorCode(page, 'print("Hello Python!"')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  const output = page.getByRole('region', { name: 'Python output' })
-  await expect(output).toContainText("couldn’t run this yet", { timeout: 20_000 })
-  await page.getByRole('button', { name: /Check answer/ }).click()
-  await expect(page.getByRole('status')).toContainText('Run your code successfully')
-  await expect(page.getByRole('button', { name: /Next lesson/ })).toBeDisabled()
-})
-
-test('an endless loop times out and the run control recovers', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
-  test.setTimeout(25_000)
-  await waitForPython(page)
-  await setEditorCode(page, 'while True:\n    pass')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('endless loop', { timeout: 15_000 })
-  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled()
-  await setEditorCode(page, 'print("recovered")')
-  await page.getByRole('button', { name: /Run code/ }).click()
-  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('recovered', { timeout: 15_000 })
-})
-
-test('tablet layout stays reachable without horizontal page overflow', async ({ page }, testInfo) => {
-  await waitForPython(page)
+test('tablet layout remains focusable, scrollable, and free from horizontal overflow', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Tablet coverage uses WebKit.')
   await expect(page.getByRole('heading', { name: 'Hello Python' })).toBeVisible()
-  const editor = page.locator('.cm-content')
-  await expect(editor).toBeVisible()
-  await editor.click()
-  await expect(editor).toBeFocused()
-  await expect(page.getByRole('button', { name: /Run code/ })).toBeVisible()
-  await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
-  await expect(page.getByRole('region', { name: 'Python output' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toBeVisible()
+  await page.locator('.cm-content').click()
+  await expect(page.locator('.cm-content')).toBeFocused()
   await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
 
-  const dimensions = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-    height: document.documentElement.scrollHeight,
-  }))
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport + 1)
-  expect(dimensions.height).toBeGreaterThanOrEqual(page.viewportSize()?.height ?? 0)
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const expectedWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(expectedWidth)
+  if (initialOrientation === 'landscape') {
+    await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
+    const editorBox = await page.locator('.cm-editor').boundingBox()
+    const outputBox = await page.getByRole('region', { name: 'Python output' }).boundingBox()
+    expect(editorBox).not.toBeNull()
+    expect(outputBox).not.toBeNull()
+    expect(outputBox!.x).toBeGreaterThan(editorBox!.x + editorBox!.width / 2)
+  } else {
+    await expect(page.getByRole('button', { name: 'Open curriculum' })).toBeVisible()
+  }
+  await verifyViewport(page)
+  await capture(page, testInfo, `ipad-${initialOrientation}`)
 
-  if ((page.viewportSize()?.width ?? 0) < 1024) {
+  if (initialOrientation === 'portrait') {
     await page.getByRole('button', { name: 'Open curriculum' }).click()
-    const navigatorDialog = page.getByRole('dialog', { name: 'Choose a lesson' })
-    await expect(navigatorDialog).toBeVisible()
-    await expect(navigatorDialog.getByText('Getting Python to do things')).toBeVisible()
-    const fundamentalsToggle = navigatorDialog.getByRole('button', { name: /Getting Python to do things/ })
-    await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'true')
-    await fundamentalsToggle.click()
-    await expect(fundamentalsToggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(navigatorDialog.getByRole('button', { name: 'Hello Python' })).toHaveCount(0)
-    await fundamentalsToggle.click()
-    await expect(navigatorDialog.getByRole('button', { name: 'Hello Python' })).toBeVisible()
+    const navigator = page.getByRole('dialog', { name: 'Choose a lesson' })
+    await expect(navigator).toBeVisible()
+    await expect(navigator.getByRole('button', { name: 'Hello Python' })).toBeVisible()
     await page.getByRole('button', { name: 'Close curriculum' }).last().click()
-    await expect(page.getByRole('dialog', { name: 'Choose a lesson' })).toHaveCount(0)
   }
 
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}.png`, fullPage: true })
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedWidth = rotatedOrientation === 'portrait' ? 834 : 1194
+  await page.setViewportSize(rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 })
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedWidth)
+  if (rotatedOrientation === 'portrait') {
+    await expect(page.getByRole('button', { name: 'Open curriculum' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toHaveCount(0)
+  } else {
+    await expect(page.getByRole('button', { name: 'Collapse lesson navigation' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open curriculum' })).toHaveCount(0)
+  }
+  await verifyViewport(page)
+  await page.getByRole('region', { name: 'Python output' }).scrollIntoViewIfNeeded()
+  await expect(page.getByRole('region', { name: 'Python output' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}`)
 })
+
+async function verifyViewport(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewport + 1)
+}

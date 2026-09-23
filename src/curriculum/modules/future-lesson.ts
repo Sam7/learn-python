@@ -13,11 +13,13 @@ export function futureLesson(
     title,
     shortTitle: title,
     summary,
-    explanation: { lead: 'This lesson is planned for a future Python Steps update.' },
-    starterCode: '# This lesson is coming soon.',
-    task,
-    hints: [],
-    validation: { kind: 'unavailable' },
+    steps: [{
+      id: `${id}-planned`,
+      content: [
+        { type: 'paragraph', text: 'This lesson is planned for a future Python Steps update.' },
+        { type: 'callout', tone: 'note', text: task },
+      ],
+    }],
     status: 'coming-soon',
   }
 }

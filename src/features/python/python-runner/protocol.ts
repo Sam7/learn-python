@@ -1,4 +1,4 @@
-import type { PythonInputMode, PythonInputTranscriptEntry } from './types'
+import type { PythonInputMode, PythonInputTranscriptEntry, PythonTraceFrame } from './types'
 
 export type WorkerInput = {
   mode: PythonInputMode
@@ -7,7 +7,7 @@ export type WorkerInput = {
 }
 
 export type WorkerRequest =
-  | { type: 'run'; requestId: number; code: string; input: WorkerInput }
+  | { type: 'run'; requestId: number; code: string; input: WorkerInput; trace: boolean }
   | { type: 'reset'; requestId: number }
 
 export type WorkerResponse =
@@ -21,6 +21,7 @@ export type WorkerResponse =
       stdout: string
       stderr: string
       inputTranscript: PythonInputTranscriptEntry[]
+      traceFrames?: PythonTraceFrame[]
       error?: string
       durationMs: number
     }
