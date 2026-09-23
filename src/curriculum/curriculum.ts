@@ -2,10 +2,11 @@ import type { Curriculum, LearningActivity, Lesson, LessonStep, Stage } from './
 import { futureStages } from './stages/future-stages'
 import { stageZero } from './stages/stage-0'
 import { stageOne } from './stages/stage-1'
+import { stageTwo } from './stages/stage-2'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, stageOne, ...futureStages],
+  stages: [stageZero, stageOne, stageTwo, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {
@@ -136,6 +137,24 @@ export function validateCurriculum(curriculumData: Curriculum): string[] {
         }
         if (activity.kind === 'predict-state' && !activity.choices.includes(activity.expectedValue)) {
           issues.push(`State prediction ${activity.id} must include its expected value as a choice.`)
+        }
+        if (activity.kind === 'trace-table') {
+          if (activity.variables.length === 0 || activity.variables.some((name) => !name.trim())) {
+            issues.push(`Trace table ${activity.id} needs one or more named variables.`)
+          }
+          if (new Set(activity.variables).size !== activity.variables.length) {
+            issues.push(`Trace table ${activity.id} cannot repeat a variable column.`)
+          }
+          if (activity.checkpoints.length === 0) {
+            issues.push(`Trace table ${activity.id} needs at least one checkpoint.`)
+          }
+          const checkpointIds = activity.checkpoints.map((checkpoint) => checkpoint.id)
+          if (new Set(checkpointIds).size !== checkpointIds.length) {
+            issues.push(`Trace table ${activity.id} cannot repeat a checkpoint id.`)
+          }
+          if (activity.checkpoints.some((checkpoint) => !Number.isInteger(checkpoint.line) || checkpoint.line < 1)) {
+            issues.push(`Trace table ${activity.id} checkpoints need positive integer line numbers.`)
+          }
         }
         if (activity.kind === 'arrange-code') {
           const fragmentIds = activity.fragments.map((fragment) => fragment.id)

@@ -63,6 +63,34 @@ async function openStageOneExpressionLesson(page: Page) {
   await expect(page.getByRole('heading', { name: 'Expressions collapse into values' })).toBeVisible()
 }
 
+async function openStageTwoTraceTableLesson(page: Page) {
+  await page.evaluate(() => {
+    localStorage.setItem('python-steps:progress', JSON.stringify({
+      version: 2,
+      currentLessonId: 'stage-2-lesson-6',
+      currentStepByLesson: { 'stage-2-lesson-6': 'fill-the-state-trace-table' },
+      completedActivityIds: [
+        'print-a-greeting', 'predict-message-order', 'put-instructions-in-order',
+        'experiment-with-output', 'repair-a-missing-quote', 'trace-three-instructions',
+        'write-a-three-line-introduction',
+        'predict-number-and-text', 'number-or-text', 'predict-three-calculations',
+        'edit-three-calculations', 'predict-expression-result', 'create-an-expression-for-twenty',
+        'predict-two-parenthesized-expressions', 'make-parentheses-change-the-result',
+        'predict-joined-and-repeated-text', 'predict-joining-digit-text',
+        'observe-mixed-value-type-error', 'predict-length-of-word', 'find-length-of-python',
+        'calculate-three-minutes', 'calculate-two-hours', 'calculate-two-hours-fifteen-minutes',
+        'predict-named-score', 'create-a-named-value', 'predict-calculation-before-assignment',
+        'calculate-before-saving', 'choose-the-clearer-program', 'name-price-and-quantity',
+        'predict-changing-score-output', 'reassign-the-same-name', 'predict-incremented-score',
+        'increment-a-number',
+      ],
+      activityProgress: {},
+    }))
+  })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Trace multiple pieces of state' })).toBeVisible()
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
@@ -106,9 +134,9 @@ test('Stage 0: prediction, output, and saved progress work across a refresh', as
   await expect(page.getByRole('button', { name: 'Next lesson' })).toBeEnabled()
 })
 
-test('Stages 0–1: the first two curriculum stages complete as expected', async ({ page, browserName }, testInfo) => {
+test('Stages 0–2: the first three curriculum stages complete as expected', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Curriculum content execution is covered in Chromium.')
-  test.setTimeout(150_000)
+  test.setTimeout(240_000)
   const output = page.getByRole('region', { name: 'Python output' })
   await runAndExpectPass(page, 'print("Mine!")')
   await page.getByRole('button', { name: 'Next lesson' }).click()
@@ -206,13 +234,99 @@ test('Stages 0–1: the first two curriculum stages complete as expected', async
   await runAndExpectPass(page, 'print(2 * 60 * 60)')
   await page.getByRole('button', { name: 'Next step' }).click()
   await runAndExpectPass(page, 'print(2 * 60 * 60 + 15 * 60)')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
   await expect(page.getByText('8/8 ready')).toBeVisible()
   await page.getByRole('button', { name: 'Show a hint' }).click()
   await capture(page, testInfo, 'stage-1-desktop')
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Giving a value a name' })).toBeVisible()
+
+  await page.getByRole('radio', { name: '10', exact: true }).check()
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('score is 10 after line 1')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await setEditorCode(page, 'print(10)')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('Give a value a name')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await runAndExpectPass(page, 'points = 10\nprint(points)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('radio', { name: '8', exact: true }).check()
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('score is 8 after line 1')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'answer = 12 + 3\nprint(answer)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: /price and quantity/ }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'cost = 12\ncount = 4\nprint(cost * count)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('10\n20')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed 10')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runAndExpectPass(page, 'points = 10\nprint(points)\npoints = 20\nprint(points)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('radio', { name: '11', exact: true }).check()
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('score is 11 after line 2')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await setEditorCode(page, 'score = 20\nscore = 21\nprint(score)')
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('status')).toContainText('Use the current value on the right side')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await runAndExpectPass(page, 'score = 20\nscore = score + 1\nprint(score)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  const traceTable = [
+    ['coins after line 1', '5'], ['stars after line 1', '—'],
+    ['coins after line 2', '5'], ['stars after line 2', '2'],
+    ['coins after line 4', '8'], ['stars after line 4', '2'],
+    ['coins after line 5', '8'], ['stars after line 5', '3'],
+    ['coins after line 6', '6'], ['stars after line 6', '3'],
+  ] as const
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await capture(page, testInfo, 'stage-2-trace-table-desktop')
+  for (const [label, value] of traceTable) await page.getByRole('textbox', { name: label }).fill(value)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Expression mini-challenge' })).toBeVisible()
-  await expect(page.locator('.cm-content')).toContainText('15 * 60')
+  await expect(page.getByRole('textbox', { name: 'stars after line 1' })).toHaveValue('—')
+  await page.getByRole('textbox', { name: 'coins after line 1' }).fill('4')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('after line 1, coins is 5')
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await page.getByRole('textbox', { name: 'coins after line 1' }).fill('5')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('matches the values Python had at every checkpoint', { timeout: 20_000 })
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await answerLivePrompt(page, 'Sam', 1)
+  await expect(page.getByRole('status')).toContainText('works with different answers', { timeout: 20_000 })
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await answerLivePrompt(page, '12', 1)
+  await expect(output).toContainText('Python raised TypeError, as expected.', { timeout: 20_000 })
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await answerLivePrompt(page, '12', 1)
+  await expect(page.getByRole('status')).toContainText('works with different answers', { timeout: 20_000 })
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await answerLivePrompt(page, 'Maya', 1)
+  await answerLivePrompt(page, '12', 2)
+  await expect(page.getByRole('status')).toContainText('works with different answers', { timeout: 20_000 })
+  await expect(page.getByText('10/10 ready')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Build: the future machine' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('age = int(age_text)')
   await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
 })
 
@@ -309,6 +423,11 @@ test('tablet layout remains focusable, scrollable, and free from horizontal over
   await expect(page.getByRole('textbox', { name: 'Your output prediction' })).toBeVisible()
   await verifyViewport(page)
   await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-1-expression`)
+  await openStageTwoTraceTableLesson(page)
+  await expect(page.getByRole('table', { name: 'Your state trace table' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'coins after line 1' })).toBeVisible()
+  await verifyViewport(page)
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-2-trace-table`)
 })
 
 async function verifyViewport(page: Page) {

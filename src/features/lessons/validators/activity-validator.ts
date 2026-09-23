@@ -1,10 +1,12 @@
 import type {
   ArrangeCodeActivity,
+  AstRequirement,
   CodeActivity,
   LearningActivity,
   LearnerResponse,
   OutputExpectation,
   PredictStateActivity,
+  TraceTableActivity,
   ValidationResult,
 } from '../../../curriculum/types'
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
@@ -85,9 +87,9 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
       }
 }
 
-function pythonAstCheck(source: string, requirement: 'text-variable' | 'variable-in-sentence'): string {
+function pythonAstCheck(source: string, requirement: AstRequirement): string {
   const literal = JSON.stringify(source)
-  const sentenceCheck = requirement === 'variable-in-sentence' ? `
+  const conceptCheck = requirement === 'variable-in-sentence' ? `
 variable_names = {
     target.id
     for node in ast.walk(tree)
@@ -117,7 +119,76 @@ if not any(
     for node in ast.walk(tree)
 ):
     raise AssertionError("Put your text variable inside a sentence that you print.")
+` : requirement === 'named-value' ? `
+assigned_names = {
+    target.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Assign)
+    for target in node.targets
+    if isinstance(target, ast.Name)
+}
+printed_names = {
+    child.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    for argument in node.args
+    for child in ast.walk(argument)
+    if isinstance(child, ast.Name)
+}
+if not assigned_names.intersection(printed_names):
+    raise AssertionError("Give a value a name, then print that name.")
+` : requirement === 'variable-reassignment' ? `
+assignment_counts = {}
+for node in ast.walk(tree):
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                assignment_counts[target.id] = assignment_counts.get(target.id, 0) + 1
+printed_names = {
+    child.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    for argument in node.args
+    for child in ast.walk(argument)
+    if isinstance(child, ast.Name)
+}
+if not any(count >= 2 and name in printed_names for name, count in assignment_counts.items()):
+    raise AssertionError("Change the same named value, then print it.")
+` : requirement === 'variable-increment' ? `
+incremented_names = set()
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.BinOp):
+        continue
+    if not isinstance(node.value.op, ast.Add) or not isinstance(node.value.left, ast.Name):
+        continue
+    if not isinstance(node.value.right, ast.Constant) or node.value.right.value != 1:
+        continue
+    for target in node.targets:
+        if isinstance(target, ast.Name) and target.id == node.value.left.id:
+            incremented_names.add(target.id)
+printed_names = {
+    child.id
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Name)
+    and node.func.id == "print"
+    for argument in node.args
+    for child in ast.walk(argument)
+    if isinstance(child, ast.Name)
+}
+if not incremented_names.intersection(printed_names):
+    raise AssertionError("Add 1 to the value the same name already holds, then print it.")
 ` : ''
+
+  const textVariableCheck = requirement === 'text-variable' || requirement === 'variable-in-sentence'
+    ? `
+if not has_text_variable:
+    raise AssertionError("Create a variable containing some text first.")`
+    : ''
 
   return `
 import ast
@@ -131,10 +202,31 @@ has_text_variable = any(
     and len(node.value.value.strip()) > 0
     for node in ast.walk(tree)
 )
-if not has_text_variable:
-    raise AssertionError("Create a variable containing some text first.")
-${sentenceCheck}
+${textVariableCheck}
+${conceptCheck}
 `
+}
+
+function astAssessmentMessage(requirement: AstRequirement, passed: boolean): string {
+  if (passed) {
+    const messages: Record<AstRequirement, string> = {
+      'text-variable': 'Great work — you created and used a text variable.',
+      'variable-in-sentence': 'Great work — your sentence uses the text value.',
+      'named-value': 'Great work — you gave a value a name and used it.',
+      'variable-reassignment': 'Great work — the same named value changes as the program runs.',
+      'variable-increment': 'Great work — you added 1 to the value the name already held.',
+    }
+    return messages[requirement]
+  }
+
+  const messages: Record<AstRequirement, string> = {
+    'text-variable': 'Create a variable containing text, then use its name in your program.',
+    'variable-in-sentence': 'Put your text variable inside a sentence that you print.',
+    'named-value': 'Give a value a name, then use that name in print().',
+    'variable-reassignment': 'Assign a new value to the same name, then print the name.',
+    'variable-increment': 'Use the current value on the right side: score = score + 1.',
+  }
+  return messages[requirement]
 }
 
 async function validateCodeActivity(
@@ -170,24 +262,22 @@ async function validateCodeActivity(
 
   if (assessment.kind === 'output') return validateOutputActivity(activity, context.execution.stdout)
 
-  if (assessment.kind === 'ast') {
-    if (assessment.rejectOutput?.some((rejected) => normalizedOutput(context.execution.stdout).includes(rejected))) {
+  if (assessment.kind === 'output-and-ast' && !expectationMatches(assessment.expectation, context.execution.stdout)) {
+    return {
+      passed: false,
+      message: 'The output is not quite right yet. Compare it with the task and try again.',
+      evidence: { expected: expectationDescription(assessment.expectation), actual: normalizedOutput(context.execution.stdout) || '(no output)' },
+    }
+  }
+
+  if (assessment.kind === 'ast' || assessment.kind === 'output-and-ast') {
+    if (assessment.kind === 'ast' && assessment.rejectOutput?.some((rejected) => normalizedOutput(context.execution.stdout).includes(rejected))) {
       return { passed: false, message: 'Change the example value to something of your own.' }
     }
     const result = await context.runPython({ code: pythonAstCheck(source, assessment.requirement) })
-    if (result.status === 'success') {
-      return {
-        passed: true,
-        message: assessment.requirement === 'variable-in-sentence'
-          ? 'Great work — your sentence uses the text value.'
-          : 'Great work — you created and used a text variable.',
-      }
-    }
     return {
-      passed: false,
-      message: result.error?.includes('Put your text variable')
-        ? 'Put your text variable inside a sentence that you print.'
-        : 'Create a variable containing text, then use its name in your program.',
+      passed: result.status === 'success',
+      message: astAssessmentMessage(assessment.requirement, result.status === 'success'),
     }
   }
 
@@ -205,7 +295,7 @@ async function validateCodeActivity(
     const inputTranscriptHasAnswers = requiredInputs.every(({ inputIndex }) =>
       result.inputTranscript.some((entry) => entry.inputIndex === inputIndex),
     )
-    const allAnswersUsed = requiredInputs.every(({ inputIndex, minimumOccurrences = 1 }) => {
+    const echoedAnswersUsed = requiredInputs.filter(({ mustAppearInOutput = true }) => mustAppearInOutput).every(({ inputIndex, minimumOccurrences = 1 }) => {
       const answer = testCase.inputs[inputIndex]
       return typeof answer === 'string' && countOccurrences(stdout, answer) >= minimumOccurrences
     })
@@ -214,10 +304,10 @@ async function validateCodeActivity(
     if (!inputTranscriptHasAnswers) {
       return { passed: false, message: `Ask for all ${requiredInputs.length} answers before your program finishes.` }
     }
-    if (!allAnswersUsed || !outputIsCorrect) {
+    if (!echoedAnswersUsed || !outputIsCorrect) {
       return {
         passed: false,
-        message: 'Use every answer from input() in the messages your program prints.',
+        message: 'Use the answers where they affect your program, then compare the result with the task.',
         evidence: testCase.output
           ? { expected: expectationDescription(testCase.output), actual: stdout || '(no output)' }
           : undefined,
@@ -241,12 +331,49 @@ function formatTraceValue(value: PythonTraceValue | undefined): string {
   return String(value)
 }
 
-function stateAfterLine(activity: PredictStateActivity, frames: NonNullable<PythonRunResult['traceFrames']>) {
-  const targetOccurrence = activity.occurrence ?? 1
-  const matchingIndices = frames.flatMap((frame, index) => frame.event === 'line' && frame.line === activity.line ? [index] : [])
-  const matchingIndex = matchingIndices[targetOccurrence - 1]
+function stateAfterLine(
+  line: number,
+  occurrence: number,
+  variable: string,
+  frames: NonNullable<PythonRunResult['traceFrames']>,
+) {
+  const matchingIndices = frames.flatMap((frame, index) => frame.event === 'line' && frame.line === line ? [index] : [])
+  const matchingIndex = matchingIndices[occurrence - 1]
   if (matchingIndex === undefined) return undefined
-  return frames[matchingIndex + 1]?.locals[activity.variable] ?? frames[matchingIndex].locals[activity.variable]
+  const nextLocals = frames[matchingIndex + 1]?.locals
+  if (nextLocals && Object.hasOwn(nextLocals, variable)) return nextLocals[variable]
+  return frames[matchingIndex].locals[variable]
+}
+
+function predictStateAfterLine(activity: PredictStateActivity, frames: NonNullable<PythonRunResult['traceFrames']>) {
+  return stateAfterLine(activity.line, activity.occurrence ?? 1, activity.variable, frames)
+}
+
+function validateTraceTable(activity: TraceTableActivity, context: ActivityAssessmentContext): ValidationResult {
+  if (context.execution.status !== 'success') return failedExecution(context.execution)
+  const frames = context.execution.traceFrames ?? []
+  if (frames.length === 0) return { passed: false, message: 'Python did not record the program state. Run the trace again.' }
+  if (!context.response || Array.isArray(context.response) || typeof context.response !== 'object') {
+    return { passed: false, message: 'Fill in every cell of the table before running it.' }
+  }
+
+  for (const checkpoint of activity.checkpoints) {
+    for (const variable of activity.variables) {
+      const key = `${checkpoint.id}:${variable}`
+      const prediction = context.response[key]?.trim()
+      if (!prediction) return { passed: false, message: 'Fill in every cell of the table before running it.' }
+      const value = stateAfterLine(checkpoint.line, checkpoint.occurrence ?? 1, variable, frames)
+      const expected = value === undefined ? '—' : formatTraceValue(value)
+      if (prediction !== expected) {
+        return {
+          passed: false,
+          message: `At ${checkpoint.label}, ${variable} is ${expected}. Update that cell and run the trace again.`,
+          evidence: { expected, actual: prediction },
+        }
+      }
+    }
+  }
+  return { passed: true, message: 'Your table matches the values Python had at every checkpoint.' }
 }
 
 function validateArrangeCode(activity: ArrangeCodeActivity, response: LearnerResponse | undefined): ValidationResult {
@@ -284,7 +411,7 @@ export async function assessActivity(
     }
     case 'predict-state': {
       if (context.execution.status !== 'success') return failedExecution(context.execution)
-      const actual = stateAfterLine(activity, context.execution.traceFrames ?? [])
+      const actual = predictStateAfterLine(activity, context.execution.traceFrames ?? [])
       if (actual === undefined) return { passed: false, message: `Python did not reach line ${activity.line}. Check the example.` }
       const prediction = responseText(context.response)
       if (prediction === undefined) return { passed: false, message: 'Choose what you think the value will be.' }
@@ -311,6 +438,8 @@ export async function assessActivity(
       return context.execution.traceFrames?.length
         ? { passed: true, message: 'You traced the program from start to finish.' }
         : { passed: false, message: 'Python did not record any steps for this program.' }
+    case 'trace-table':
+      return validateTraceTable(activity, context)
     case 'reflection':
       return { passed: false, message: 'This reflection is for your own thinking and is not graded.' }
   }

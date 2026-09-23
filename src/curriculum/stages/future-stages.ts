@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 2,
-    title: 'Names, State, and Input',
-    description: 'Name values, see how they change, and receive information.',
-    lessons: [
-      'Giving a value a name',
-      'The right side happens first',
-      'Names make programs meaningful',
-      'Values can change over time',
-      'The famous x = x + 1',
-      'Trace multiple pieces of state',
-      'Programs can receive information',
-      'Input is text',
-      'Converting representations',
-      'Build: the future machine',
-    ],
-  },
-  {
     order: 3,
     title: 'Decisions',
     description: 'Use true-or-false questions to choose what a program does.',

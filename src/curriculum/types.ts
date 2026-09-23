@@ -28,14 +28,18 @@ export interface BehaviorTestCase {
   requiredInputs?: Array<{
     inputIndex: number
     minimumOccurrences?: number
+    mustAppearInOutput?: boolean
   }>
 }
 
+export type AstRequirement = 'text-variable' | 'variable-in-sentence' | 'named-value' | 'variable-reassignment' | 'variable-increment'
+
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
+  | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
   | { kind: 'behavior'; cases: BehaviorTestCase[] }
   | { kind: 'runtime-error'; exceptionName: string }
-  | { kind: 'ast'; requirement: 'text-variable' | 'variable-in-sentence'; rejectOutput?: string[] }
+  | { kind: 'ast'; requirement: AstRequirement; rejectOutput?: string[] }
 
 export interface CodeActivity extends ActivityBase {
   kind: 'code'
@@ -83,6 +87,21 @@ export interface TraceActivity extends ActivityBase {
   sampleInputs?: string[]
 }
 
+export interface TraceTableCheckpoint {
+  id: string
+  line: number
+  label: string
+  occurrence?: number
+}
+
+export interface TraceTableActivity extends ActivityBase {
+  kind: 'trace-table'
+  code: string
+  variables: string[]
+  checkpoints: TraceTableCheckpoint[]
+  sampleInputs?: string[]
+}
+
 /** A private, ungraded pause for the learner to put their reasoning into words. */
 export interface ReflectionActivity extends ActivityBase {
   kind: 'reflection'
@@ -97,6 +116,7 @@ export type LearningActivity =
   | ChoiceActivity
   | ArrangeCodeActivity
   | TraceActivity
+  | TraceTableActivity
   | ReflectionActivity
 
 export interface LessonStep {

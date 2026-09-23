@@ -10,6 +10,7 @@ import type {
   PredictStateActivity,
   ReflectionActivity,
   TraceActivity,
+  TraceTableActivity,
   ValidationResult,
 } from '../../../curriculum/types'
 import type { PythonRunResult } from '../../python/python-runner/types'
@@ -53,6 +54,8 @@ export function ActivityRenderer(props: ActivityRendererProps) {
       return <ArrangeCodeView {...shared} activity={activity} />
     case 'trace':
       return <TraceView {...shared} activity={activity} />
+    case 'trace-table':
+      return <TraceTableView {...shared} activity={activity} />
     case 'reflection':
       return <ReflectionView {...shared} activity={activity} />
   }
@@ -229,6 +232,75 @@ function TraceView({ activity, onRun, isRunning, runtimeReady, execution, feedba
               </dl>
             </div>
           ) : null}
+        </div>
+        <ExecutionOutput execution={execution} isRunning={isRunning} feedback={feedback} />
+      </div>
+      <ActivityHints hints={activity.hints ?? []} visibleCount={hintsRevealed} onReveal={onRevealHint} />
+    </section>
+  )
+}
+
+function TraceTableView({ activity, response, onResponseChange, onRun, isRunning, runtimeReady, execution, feedback, hintsRevealed, onRevealHint }: SharedActivityProps & { activity: TraceTableActivity }) {
+  const answers = typeof response === 'object' && !Array.isArray(response) ? response : {}
+  const cellKey = (checkpointId: string, variable: string) => `${checkpointId}:${variable}`
+  const allCellsFilled = activity.checkpoints.every((checkpoint) =>
+    activity.variables.every((variable) => Boolean(answers[cellKey(checkpoint.id, variable)]?.trim())),
+  )
+
+  return (
+    <section className="rounded-xl border border-line bg-white p-3.5 sm:p-4" aria-label={activity.title}>
+      <div className="mb-3">
+        <h2 className="text-base font-bold text-ink">{activity.title}</h2>
+        <p className="mt-1 text-sm leading-5 text-muted">{activity.prompt}</p>
+      </div>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="min-w-0">
+          <p className="mb-1.5 text-xs font-semibold text-muted">Program</p>
+          <CompactCode code={activity.code} />
+        </div>
+        <div className="min-w-0">
+          <div className="overflow-x-auto rounded-lg border border-line">
+            <table className="w-full min-w-[22rem] border-collapse text-left text-sm" aria-label="Your state trace table">
+              <caption className="sr-only">Enter each variable's value after the listed program line.</caption>
+              <thead className="bg-mist/60 text-xs text-muted">
+                <tr>
+                  <th scope="col" className="px-2.5 py-2 font-semibold">After this line</th>
+                  {activity.variables.map((variable) => <th scope="col" key={variable} className="px-2.5 py-2 font-mono font-semibold">{variable}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {activity.checkpoints.map((checkpoint) => (
+                  <tr key={checkpoint.id} className="border-t border-line">
+                    <th scope="row" className="whitespace-nowrap px-2.5 py-2 font-medium text-muted">{checkpoint.label}</th>
+                    {activity.variables.map((variable) => {
+                      const key = cellKey(checkpoint.id, variable)
+                      return (
+                        <td key={variable} className="min-w-24 px-1.5 py-1.5">
+                          <input
+                            aria-label={`${variable} ${checkpoint.label}`}
+                            className="min-h-10 w-full rounded-md border border-line bg-white px-2 font-mono text-sm text-ink outline-none focus:border-teal focus:ring-2 focus:ring-teal/20"
+                            value={answers[key] ?? ''}
+                            onChange={(event) => onResponseChange({ ...answers, [key]: event.target.value })}
+                            autoCapitalize="off"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted">Fill every cell, then run the program to compare your table with Python’s real state.</p>
+        </div>
+      </div>
+      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(250px,0.85fr)]">
+        <div>
+          <Button type="button" size="sm" className="min-h-10" disabled={isRunning || !runtimeReady || !allCellsFilled} onClick={onRun}>
+            {isRunning ? 'Tracing…' : 'Run and compare'}
+          </Button>
         </div>
         <ExecutionOutput execution={execution} isRunning={isRunning} feedback={feedback} />
       </div>

@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored Stage 0 and Stage 1 lessons and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first three stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -64,14 +64,27 @@ describe('the canonical curriculum outline', () => {
       'Different values allow different operations',
       'Functions as black boxes',
       'Expression mini-challenge',
+      'Giving a value a name',
+      'The right side happens first',
+      'Names make programs meaningful',
+      'Values can change over time',
+      'The famous x = x + 1',
+      'Trace multiple pieces of state',
+      'Programs can receive information',
+      'Input is text',
+      'Converting representations',
+      'Build: the future machine',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(95)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(85)
+    expect(readyLessons).toHaveLength(24)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
     expect(getNextLesson('first-tiny-creation')?.title).toBe('Values')
-    expect(getNextCurriculumLesson('stage-1-lesson-8')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-1-lesson-8')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-1-lesson-8')?.title).toBe('Giving a value a name')
+    expect(getNextLesson('stage-1-lesson-8')?.title).toBe('Giving a value a name')
+    expect(getNextCurriculumLesson('stage-2-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-2-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -368,5 +381,90 @@ describe('Stage 1 activity assessment', () => {
       })
       expect(result.passed).toBe(true)
     }
+  })
+})
+
+describe('Stage 2 activity assessment', () => {
+  it('supports input that is transformed rather than echoed into output', async () => {
+    const activity: CodeActivity = {
+      id: 'convert-input-age',
+      kind: 'code',
+      title: 'Convert the age',
+      prompt: 'Print the next age.',
+      required: true,
+      starterCode: 'age = int(input())\nprint(age + 1)',
+      assessment: {
+        kind: 'behavior',
+        cases: [
+          { inputs: ['12'], output: { mode: 'exact', lines: ['13'] }, requiredInputs: [{ inputIndex: 0, mustAppearInOutput: false }] },
+          { inputs: ['7'], output: { mode: 'exact', lines: ['8'] }, requiredInputs: [{ inputIndex: 0, mustAppearInOutput: false }] },
+        ],
+      },
+    }
+    const result = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('13\n'),
+      runPython: async ({ input }) => {
+        const answer = input?.lines?.[0] ?? ''
+        const numericAnswer = Number(answer)
+        return success(`${numericAnswer + 1}\n`, [{ inputIndex: 0, prompt: '', answer }])
+      },
+    })
+    expect(result.passed).toBe(true)
+  })
+
+  it('checks multiple learner-filled state cells against actual execution frames', async () => {
+    const candidate = getLessonById('stage-2-lesson-6')!.steps[0].activity!
+    expect(candidate.kind).toBe('trace-table')
+    if (candidate.kind !== 'trace-table') throw new Error('Expected a trace-table activity')
+    const execution = success('6 3\n', [], [
+      { line: 1, event: 'line', locals: {} },
+      { line: 2, event: 'line', locals: { coins: 5 } },
+      { line: 4, event: 'line', locals: { coins: 5, stars: 2 } },
+      { line: 5, event: 'line', locals: { coins: 8, stars: 2 } },
+      { line: 6, event: 'line', locals: { coins: 8, stars: 3 } },
+      { line: 7, event: 'line', locals: { coins: 6, stars: 3 } },
+    ])
+    const response = {
+      'after-coins-start:coins': '5', 'after-coins-start:stars': '—',
+      'after-stars-start:coins': '5', 'after-stars-start:stars': '2',
+      'after-coins-plus:coins': '8', 'after-coins-plus:stars': '2',
+      'after-stars-plus:coins': '8', 'after-stars-plus:stars': '3',
+      'after-coins-minus:coins': '6', 'after-coins-minus:stars': '3',
+    }
+    expect(await assessActivity(candidate, { response, execution, runPython: noRun })).toMatchObject({ passed: true })
+
+    const incorrect = await assessActivity(candidate, {
+      response: { ...response, 'after-coins-start:coins': '4' },
+      execution,
+      runPython: noRun,
+    })
+    expect(incorrect).toMatchObject({ passed: false, evidence: { expected: '5', actual: '4' } })
+    expect(incorrect.message).toContain('after line 1, coins is 5')
+  })
+
+  it('runs the AST check only after the required output has passed', async () => {
+    const activity = getLessonById('stage-2-lesson-1')!.steps[1].activity!
+    expect(activity.kind).toBe('code')
+    if (activity.kind !== 'code') throw new Error('Expected a code activity')
+    let astRunCount = 0
+    const runAst = async () => {
+      astRunCount += 1
+      return success('')
+    }
+    expect((await assessActivity(activity, {
+      code: 'points = 10\nprint(points)',
+      execution: success('10\n'),
+      runPython: runAst,
+    })).passed).toBe(true)
+    expect(astRunCount).toBe(1)
+
+    const wrongOutput = await assessActivity(activity, {
+      code: 'points = 10\nprint(points)',
+      execution: success('11\n'),
+      runPython: runAst,
+    })
+    expect(wrongOutput.passed).toBe(false)
+    expect(astRunCount).toBe(1)
   })
 })

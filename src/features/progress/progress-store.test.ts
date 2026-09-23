@@ -78,6 +78,19 @@ describe('progress persistence', () => {
     expect(progress.activityProgress['unknown-activity']).toBeUndefined()
   })
 
+  it('restores learner-entered trace-table cells as activity responses', () => {
+    const activity = getLessonById('stage-2-lesson-6')!.steps[0].activity!
+    const response = { 'after-coins-start:coins': '5', 'after-coins-start:stars': '—' }
+    const progress = normalizeProgress({
+      version: PROGRESS_VERSION,
+      currentLessonId: readyLessons[0].id,
+      completedActivityIds: [],
+      activityProgress: { [activity.id]: { response } },
+    }, allLessons)
+
+    expect(progress.activityProgress[activity.id]?.response).toEqual(response)
+  })
+
   it('does not restore a coming-soon lesson as the active lesson', () => {
     const future = allLessons.find((lesson) => lesson.status === 'coming-soon')!
     const progress = normalizeProgress({

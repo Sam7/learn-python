@@ -53,7 +53,7 @@ The `ContentBlock` union is intentionally small: `paragraph`, `list`, `callout`,
 
 The discriminated `LearningActivity` union is in `src/curriculum/types.ts`:
 
-- `code`: editable CodeMirror program. Run executes the program, displays output beside the editor, and immediately assesses the result. Use `required: true` for a gating task. `assessment` can check output, run behavior cases with different stdin values, use Python's `ast` module for a concept-specific requirement, or treat a specified runtime exception as the observation being assessed (the real exception remains visible).
+- `code`: editable CodeMirror program. Run executes the program, displays output beside the editor, and immediately assesses the result. Use `required: true` for a gating task. `assessment` can check output, run behavior cases with different stdin values, use Python's `ast` module for a concept-specific requirement, combine output and AST checks, or treat a specified runtime exception as the observation being assessed (the real exception remains visible).
 - `predict-output`: saves a written prediction, runs the provided program, then compares the prediction with actual stdout.
 - `predict-state`: saves a choice, traces real Python execution in the worker, and compares the chosen value with the captured local variable at the requested line/occurrence. Ensure `expectedValue` is among the choices.
 - `choice`: deterministic, immediately assessed selection.
@@ -61,7 +61,9 @@ The discriminated `LearningActivity` union is in `src/curriculum/types.ts`:
 - `trace`: runs a provided program with worker tracing and lets the learner step through captured line/local-value snapshots.
 - `reflection`: optional, private, saved text with no correctness check. Use `required: false`; reflections never block progression.
 
-“Modify”, “fill a gap”, “find the bug”, “complete the program”, and “build from a goal” are learning prompts/scaffolding for the `code` activity, not separate widgets. Give the learner a suitable `starterCode`, a clear prompt, and behavior/concept checks for the target. `required: false` also supports optional What If? experiments that should not become a quiz.
+“Modify”, “fill a gap”, “find the bug”, “complete the program”, and “build from a goal” are learning prompts/scaffolding for the `code` activity, not separate widgets. Give the learner a suitable `starterCode`, a clear prompt, and behavior/concept checks for the target. Generic AST checks currently cover text variables, naming and using a value, reassigning a name, and incrementing it from its current value; extend these with Python AST, not source regexes, when a later concept requires it. `required: false` also supports optional What If? experiments that should not become a quiz.
+
+Output expectations support exact lines, included text, a line count, distinct non-empty lines, and non-empty output. In behavior tests, `requiredInputs` confirms each listed `input()` was answered. `mustAppearInOutput` defaults to `true`; set it to `false` when an answer is transformed before display (for example, the text `"12"` becoming the number `12`). Use varied inputs and expected outputs to prove that transformed answers affect the result.
 
 Each activity has one stable ID. For a new step/task, author data and tests only. If a genuinely new interaction is needed, add it deliberately across the type union, generic renderer, assessment behavior, persistence normalization if its response shape is new, and tests. Avoid switching on lesson IDs in the UI.
 
