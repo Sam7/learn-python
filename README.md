@@ -7,7 +7,7 @@ There is no backend, account system, analytics, or server-side code execution. P
 ## Run locally
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -22,7 +22,7 @@ npm run build            # TypeScript check and production build
 npm run test:e2e         # Playwright: Chromium + WebKit tablet projects
 ```
 
-The Playwright suite starts Vite automatically when needed. It covers the first learner journey, the five fundamentals lessons, the four text-input lessons, live single- and multi-input programs, transcript fallback, cancellation, invalid Python, timeout recovery, refresh persistence, desktop layout, and iPad portrait/landscape viewport behaviour. Screenshots are written to `artifacts/screenshots/` when the screenshot tests are run.
+The Playwright suite starts Vite automatically when needed. It covers the learner journey, multi-step lessons, immediate assessment, saved code/progress, real Python state tracing, live multiple inputs, syntax errors, timeout recovery, and WebKit iPad portrait/landscape layout. Representative viewport screenshots are written to `artifacts/screenshots/`.
 
 The automated WebKit checks cannot reproduce every physical iPad software-keyboard behaviour. Before a public launch, also test Safari on a real iPad: focus the editor, type with the keyboard open, dismiss the keyboard, run the code, and continue to the next lesson in both orientations.
 
@@ -41,25 +41,26 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 ## Project shape
 
-- `src/curriculum/` contains the typed curriculum, eight initial modules, and lesson definitions. The five fundamentals lessons and four text-input lessons are available; the Types and numbers chapter and later pathway are represented as structured `coming-soon` data.
-- `src/features/lessons/` contains curriculum-agnostic rendering, navigation, and validation.
-- `src/features/lessons/validators/` contains pure/output/AST/behavior-backed validation strategies.
+- `src/curriculum/` contains the typed curriculum, ordered modules, lesson steps, content blocks, and activity definitions. Five fundamentals lessons and four text-input lessons are available; later material is structured as `coming-soon` data.
+- `src/features/learning/` renders generic activity types and owns the learner session/progression workflow. Lesson-specific rules stay in curriculum data and validation strategies.
+- `src/features/lessons/validators/` contains output, behavior, and Python-AST-backed code assessment.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.
-- `src/features/progress/` contains the versioned persistence boundary.
+- `src/features/progress/` contains the versioned persistence boundary and v1-to-v2 migration. Progress v2 stores the current step, completed activity IDs, and saved response/code per activity.
 - `src/components/ui/` contains small shadcn/ui-style primitives used by the app.
 - `e2e/` contains Playwright learner and responsive-layout coverage.
-- `docs/implementation-plan.md` records milestones and implementation decisions.
+- `docs/implementation-plan.md` records milestones and implementation decisions; `docs/lesson-authoring.md` documents the content model and author workflow.
 
 ## Adding a lesson
 
-1. Add a `Lesson` object to the appropriate module file under `src/curriculum/modules/`, with an id, order, short explanation, example/starter code, task, hints, status, and a validation definition.
-2. Add the module to `src/curriculum/curriculum.ts` if it is new. Navigation, ordering, progress, and previous/next behaviour are derived from the curriculum data.
-3. Use an existing output validator for a straightforward output challenge, or add a named validator strategy in `src/features/lessons/validators/` when the lesson needs a new concept check. Do not compare the entire source string.
-4. Add focused curriculum/validator tests in `src/features/lessons/lessons.test.ts`.
-5. If the learner journey changes, extend `e2e/python-steps.spec.ts` with the behaviour a learner should see.
-6. Run unit tests, lint, build, and the Playwright suite; inspect representative screenshots.
+1. Add a `Lesson` to the appropriate file in `src/curriculum/modules/`. Give the lesson, every step, and every activity a stable unique ID; saved progress is keyed by those IDs.
+2. Set its module/lesson `order`, summary, concept tags, and `status`. Navigation derives order from these values. Use `coming-soon` until a lesson has a complete, tested journey.
+3. Add ordered `LessonStep` records. Each step can interleave short `content` blocks (paragraph, list, callout, example) and one optional activity. A step without an activity is a short reading/observation stop. Required activities gate moving on; optional activities and reflections do not.
+4. Choose an existing generic interaction: editable code, predict output/state, choice, arrange code, step-through trace, or optional reflection. A code task is assessed automatically when Run is pressed—there is no separate Check action.
+5. Choose behavior rather than exact-source validation: output expectations for visible results, behavior cases for varied inputs, and Python AST checks only when a concept itself is required. Existing examples and JSON shapes are in [the lesson-authoring guide](docs/lesson-authoring.md).
+6. Add focused curriculum/validator tests. Add or update Playwright coverage when the learner journey or interaction changes.
+7. Run unit tests, lint, build, and Playwright; inspect desktop and tablet screenshots.
 
-The application shell derives navigation, progress, code restoration, and completion from the lesson catalogue. A normal new lesson should not require a new page or lesson-specific React branch.
+The application shell derives navigation, progress, code restoration, and completion from the curriculum. A normal new lesson should require data and tests, not a new page or lesson-specific React branch. Adding a new interaction kind is a deliberate engine change: update the discriminated union, renderer, assessor (where appropriate), persistence normalization, and unit/browser tests together.
 
 ## Python input
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   allLessons,
   curriculum,
@@ -70,7 +70,7 @@ export function useLearningSession() {
     ? { passed: true, message: 'This task is complete. You can revisit it any time.' }
     : null)
 
-  const commitProgress = useCallback((update: (current: LearnerProgress) => LearnerProgress) => {
+  const commitProgress = (update: (current: LearnerProgress) => LearnerProgress) => {
     const next = update(progressRef.current)
     progressRef.current = next
     setProgress(next)
@@ -79,9 +79,9 @@ export function useLearningSession() {
     } catch {
       // Keep the learning session usable if localStorage is unavailable or full.
     }
-  }, [repository])
+  }
 
-  const setActivityState = useCallback((activityId: string, update: (current: LearnerProgress['activityProgress'][string]) => LearnerProgress['activityProgress'][string]) => {
+  const setActivityState = (activityId: string, update: (current: LearnerProgress['activityProgress'][string]) => LearnerProgress['activityProgress'][string]) => {
     commitProgress((current) => ({
       ...current,
       activityProgress: {
@@ -89,15 +89,15 @@ export function useLearningSession() {
         [activityId]: update(current.activityProgress[activityId] ?? {}),
       },
     }))
-  }, [commitProgress])
+  }
 
-  const markActivityComplete = useCallback((activityId: string) => {
+  const markActivityComplete = (activityId: string) => {
     commitProgress((current) => current.completedActivityIds.includes(activityId)
       ? current
       : { ...current, completedActivityIds: [...current.completedActivityIds, activityId] })
-  }, [commitProgress])
+  }
 
-  const stopRun = useCallback(() => {
+  const stopRun = () => {
     operationId.current += 1
     pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
     pendingInputRef.current = null
@@ -105,66 +105,66 @@ export function useLearningSession() {
     setAnswerValue('')
     setRunningActivityId(null)
     cancel()
-  }, [cancel])
+  }
 
-  const handleCodeChange = useCallback((value: string) => {
+  const handleCodeChange = (value: string) => {
     if (!activity || activity.kind !== 'code') return
     setActivityState(activity.id, (current) => ({ ...current, code: value }))
     setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
-  }, [activity, setActivityState])
+  }
 
-  const handleResponseChange = useCallback((value: LearnerResponse) => {
+  const handleResponseChange = (value: LearnerResponse) => {
     if (!activity) return
     setActivityState(activity.id, (current) => ({ ...current, response: value }))
     setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
-  }, [activity, setActivityState])
+  }
 
-  const handleTranscriptChange = useCallback((value: string) => {
+  const handleTranscriptChange = (value: string) => {
     if (activity) setTranscriptByActivity((current) => ({ ...current, [activity.id]: value }))
-  }, [activity])
+  }
 
-  const completeWithFeedback = useCallback((activityToComplete: LearningActivity, result: ValidationResult) => {
+  const completeWithFeedback = (activityToComplete: LearningActivity, result: ValidationResult) => {
     setFeedbackByActivity((current) => ({ ...current, [activityToComplete.id]: result }))
     if (result.passed && activityToComplete.required) markActivityComplete(activityToComplete.id)
-  }, [markActivityComplete])
+  }
 
-  const makeInputHandler = useCallback((activityId: string) => (request: PythonInputRequest) => new Promise<string>((resolve, reject) => {
+  const makeInputHandler = (activityId: string) => (request: PythonInputRequest) => new Promise<string>((resolve, reject) => {
     const next = { activityId, request, resolve, reject }
     pendingInputRef.current = next
     setPendingInput(next)
     setAnswerValue('')
-  }), [])
+  })
 
-  const handleInputCancel = useCallback((message: string) => {
+  const handleInputCancel = (message: string) => {
     pendingInputRef.current?.reject(new Error(message))
     pendingInputRef.current = null
     setPendingInput(null)
     setAnswerValue('')
-  }, [])
+  }
 
-  const submitInputAnswer = useCallback(() => {
+  const submitInputAnswer = () => {
     const pending = pendingInputRef.current
     if (!pending) return
     pendingInputRef.current = null
     setPendingInput(null)
     setAnswerValue('')
     pending.resolve(answerValue)
-  }, [answerValue])
+  }
 
-  const cancelInputRun = useCallback(() => {
+  const cancelInputRun = () => {
     pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
     pendingInputRef.current = null
     setPendingInput(null)
     setAnswerValue('')
     stopRun()
-  }, [stopRun])
+  }
 
-  const runPython = useCallback((request: PythonRunRequest) => run({
+  const runPython = (request: PythonRunRequest) => run({
     ...request,
     input: request.input ?? { mode: 'transcript', lines: [] },
-  }), [run])
+  })
 
-  const runActivity = useCallback(async () => {
+  const runActivity = async () => {
     if (!activity || activity.kind === 'choice' || activity.kind === 'arrange-code' || activity.kind === 'reflection') return
     if (runtimeStatus !== 'ready') return
 
@@ -206,9 +206,9 @@ export function useLearningSession() {
     })
     if (operationId.current !== runToken) return
     completeWithFeedback(currentActivity, resultOfAssessment)
-  }, [activity, code, completeWithFeedback, handleInputCancel, interactiveInput, makeInputHandler, progressRef, run, runPython, runtimeStatus, transcriptValue])
+  }
 
-  const assessResponse = useCallback(async (response: LearnerResponse) => {
+  const assessResponse = async (response: LearnerResponse) => {
     if (!activity || activity.kind === 'code' || activity.kind === 'predict-output' || activity.kind === 'predict-state' || activity.kind === 'trace' || activity.kind === 'reflection') return
     const currentActivity = activity
     handleResponseChange(response)
@@ -218,9 +218,9 @@ export function useLearningSession() {
       runPython,
     })
     completeWithFeedback(currentActivity, result)
-  }, [activity, completeWithFeedback, handleResponseChange, runPython])
+  }
 
-  const resetCode = useCallback(() => {
+  const resetCode = () => {
     if (!activity || activity.kind !== 'code') return
     setActivityState(activity.id, (current) => ({
       ...current,
@@ -229,26 +229,26 @@ export function useLearningSession() {
     }))
     setExecutionByActivity((current) => ({ ...current, [activity.id]: null }))
     setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
-  }, [activity, setActivityState])
+  }
 
-  const revealHint = useCallback(() => {
+  const revealHint = () => {
     if (!activity) return
     setActivityState(activity.id, (current) => ({
       ...current,
       hintsRevealed: Math.min((current.hintsRevealed ?? 0) + 1, activity.hints?.length ?? 0),
     }))
-  }, [activity, setActivityState])
+  }
 
-  const goToStep = useCallback((stepId: string) => {
+  const goToStep = (stepId: string) => {
     if (isBusy) return
     commitProgress((current) => ({
       ...current,
       currentStepByLesson: { ...current.currentStepByLesson, [activeLesson.id]: stepId },
     }))
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [activeLesson.id, commitProgress, isBusy])
+  }
 
-  const goNext = useCallback(() => {
+  const goNext = () => {
     if (!canAdvance) return
     const target = getAdvanceTarget(activeLesson, currentStepId, completedActivityIds)
     if (target.kind === 'step') {
@@ -268,14 +268,14 @@ export function useLearningSession() {
       }))
       window.scrollTo({ top: 0, behavior: 'auto' })
     }
-  }, [activeLesson, canAdvance, completedActivityIds, commitProgress, currentStepId, goToStep, stopRun])
+  }
 
-  const goPrevious = useCallback(() => {
+  const goPrevious = () => {
     const previous = getPreviousStep(activeLesson, currentStepId)
     if (previous) goToStep(previous.id)
-  }, [activeLesson, currentStepId, goToStep])
+  }
 
-  const selectLesson = useCallback((lessonId: string) => {
+  const selectLesson = (lessonId: string) => {
     const selected = getLessonById(lessonId)
     if (!selected || !canOpenLesson(selected, allLessons, completedActivityIds) || isBusy) return
     stopRun()
@@ -288,9 +288,9 @@ export function useLearningSession() {
       },
     }))
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [commitProgress, completedActivityIds, isBusy, stopRun])
+  }
 
-  const resetProgress = useCallback(() => {
+  const resetProgress = () => {
     stopRun()
     const next = repository.reset()
     progressRef.current = next
@@ -299,7 +299,7 @@ export function useLearningSession() {
     setFeedbackByActivity({})
     setTranscriptByActivity({})
     setAnswerValue('')
-  }, [repository, stopRun])
+  }
 
   const currentActivityCompleted = activity ? completedActivityIds.includes(activity.id) : false
   const hintsRevealed = activity ? activityState?.hintsRevealed ?? 0 : 0
