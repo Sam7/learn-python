@@ -1,16 +1,10 @@
-import type { PythonRunResult } from '../features/python/python-runner/types'
+import type { PythonRunRequest, PythonRunResult } from '../features/python/python-runner/types'
 
 export type LessonStatus = 'ready' | 'coming-soon'
 
 export interface LessonContent {
   lead: string
   notes?: string[]
-}
-
-export interface LessonInput {
-  label: string
-  prompt: string
-  defaultValue: string
 }
 
 export type OutputValidation = {
@@ -27,11 +21,20 @@ export type AstValidation = {
   reject?: string[]
 }
 
+export type BehaviorValidation = {
+  kind: 'behavior'
+  requirement: 'uses-input'
+  cases: Array<{
+    inputs: string[]
+    expectedOutput: string[]
+  }>
+}
+
 export type UnavailableValidation = {
   kind: 'unavailable'
 }
 
-export type LessonValidation = OutputValidation | AstValidation | UnavailableValidation
+export type LessonValidation = OutputValidation | AstValidation | BehaviorValidation | UnavailableValidation
 
 export interface Lesson {
   id: string
@@ -44,7 +47,7 @@ export interface Lesson {
   starterCode: string
   task: string
   hints: string[]
-  input?: LessonInput
+  sampleInputs?: string[]
   validation: LessonValidation
   status: LessonStatus
 }
@@ -70,5 +73,5 @@ export interface ValidationResult {
 export interface LessonValidationContext {
   code: string
   execution: PythonRunResult
-  runValidationCode: (code: string) => Promise<PythonRunResult>
+  runValidationCode: (code: string, request?: Pick<PythonRunRequest, 'input'>) => Promise<PythonRunResult>
 }

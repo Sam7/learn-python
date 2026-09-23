@@ -22,7 +22,7 @@ npm run build            # TypeScript check and production build
 npm run test:e2e         # Playwright: Chromium + WebKit tablet projects
 ```
 
-The Playwright suite starts Vite automatically when needed. It covers the first learner journey, the five fundamentals lessons, the first input lesson, invalid Python, timeout recovery, refresh persistence, desktop layout, and iPad portrait/landscape viewport behaviour. Screenshots are written to `artifacts/screenshots/` when the screenshot tests are run.
+The Playwright suite starts Vite automatically when needed. It covers the first learner journey, the five fundamentals lessons, the first input lesson, live single- and multi-input programs, transcript fallback, cancellation, invalid Python, timeout recovery, refresh persistence, desktop layout, and iPad portrait/landscape viewport behaviour. Screenshots are written to `artifacts/screenshots/` when the screenshot tests are run.
 
 The automated WebKit checks cannot reproduce every physical iPad software-keyboard behaviour. Before a public launch, also test Safari on a real iPad: focus the editor, type with the keyboard open, dismiss the keyboard, run the code, and continue to the next lesson in both orientations.
 
@@ -35,13 +35,15 @@ This is a static Vite site and needs no environment variables or backend configu
 3. Use `dist` as the output directory.
 4. Deploy.
 
+The deployment includes `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers so modern browsers can use live input prompts from the worker. Browsers that cannot provide cross-origin isolation automatically use the multiline transcript input instead.
+
 The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.ts`. It is isolated there so the distribution can later be self-hosted without changing the lesson or UI layers.
 
 ## Project shape
 
 - `src/curriculum/` contains the typed curriculum, seven initial modules, and lesson definitions. The first five fundamentals lessons and the first input lesson are available; later lessons are represented as structured `coming-soon` data.
 - `src/features/lessons/` contains curriculum-agnostic rendering, navigation, and validation.
-- `src/features/lessons/validators/` contains pure/output/AST-backed validation strategies.
+- `src/features/lessons/validators/` contains pure/output/AST/behavior-backed validation strategies.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.
 - `src/features/progress/` contains the versioned persistence boundary.
 - `src/components/ui/` contains small shadcn/ui-style primitives used by the app.
@@ -58,3 +60,7 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 6. Run unit tests, lint, build, and the Playwright suite; inspect representative screenshots.
 
 The application shell derives navigation, progress, code restoration, and completion from the lesson catalogue. A normal new lesson should not require a new page or lesson-specific React branch.
+
+## Python input
+
+The Python runner supports any number of sequential `input()` calls. In a cross-origin-isolated browser, the worker pauses at each prompt and the learner answers it in the UI. In fallback mode, enter one answer per line in the Program input box; blank lines are preserved. `sys.stdin.readline()` consumes the same sequential input source. Input answers are kept in memory for the current run and are not saved to localStorage.

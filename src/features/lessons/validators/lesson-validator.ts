@@ -144,6 +144,35 @@ async function validateAst(lesson: Lesson, context: LessonValidationContext): Pr
       }
 }
 
+async function validateBehavior(lesson: Lesson, context: LessonValidationContext): Promise<ValidationResult> {
+  const definition = lesson.validation
+  if (definition.kind !== 'behavior') {
+    return { passed: false, message: 'This lesson needs a different kind of check.' }
+  }
+
+  if (context.execution.status !== 'success') {
+    return { passed: false, message: 'Run your code successfully before checking your answer.' }
+  }
+
+  for (const testCase of definition.cases) {
+    const result = await context.runValidationCode(context.code, {
+      input: { mode: 'transcript', lines: testCase.inputs },
+    })
+    if (result.status !== 'success') {
+      return { passed: false, message: 'Python could not test that yet. Make sure your program uses input() correctly.' }
+    }
+
+    const stdout = result.stdout.replace(/\r\n/g, '\n')
+    const usedEveryInput = result.inputTranscript.length >= testCase.inputs.length
+    const printedExpectedOutput = testCase.expectedOutput.every((value) => stdout.includes(value))
+    if (!usedEveryInput || !printedExpectedOutput) {
+      return { passed: false, message: 'Use the answer from input() in what your program prints.' }
+    }
+  }
+
+  return { passed: true, message: 'Great work — your program used the answer.' }
+}
+
 export async function validateLesson(
   lesson: Lesson,
   context: LessonValidationContext,
@@ -151,7 +180,7 @@ export async function validateLesson(
   if (lesson.validation.kind === 'unavailable') {
     return { passed: false, message: 'This lesson is coming soon.' }
   }
-  return lesson.validation.kind === 'ast'
-    ? validateAst(lesson, context)
-    : validateOutput(lesson, context)
+  if (lesson.validation.kind === 'ast') return validateAst(lesson, context)
+  if (lesson.validation.kind === 'behavior') return validateBehavior(lesson, context)
+  return validateOutput(lesson, context)
 }

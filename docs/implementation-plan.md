@@ -11,6 +11,7 @@
 - [x] iPad refinement: portrait/landscape layout, scrolling, touch-sized controls
 - [x] Polish and regression: screenshots, accessibility, full test/build/lint review
 - [x] Curriculum refactor: typed curriculum/module model, seven-module pathway, and responsive curriculum navigator
+- [x] General Python input: live worker prompts, transcript fallback, cancellation, and behavior validation
 
 ## Working decisions
 
@@ -20,6 +21,7 @@
 - The progress repository accepts the complete curriculum so saved code remains compatible with future lessons while current/completed navigation only uses available lessons.
 - The page uses natural document scrolling with `min-height: 100dvh` rather than trapping the learner in a fixed-height editor workspace.
 - Local UI primitives follow shadcn/ui conventions and are deliberately small for this focused product.
+- Python input is a runner capability, not lesson-specific UI. Cross-origin-isolated browsers use a shared-memory prompt bridge; other browsers use one transcript line per stdin read.
 
 ## Evidence log
 
@@ -30,3 +32,4 @@
 - Pyodide's batched stdout callback omits line separators; the worker restores them so multi-line `print()` challenges validate correctly.
 - Chromium and WebKit tablet screenshots were inspected for desktop, iPad landscape, and iPad portrait layouts.
 - The curriculum navigator uses a compact sidebar at desktop/tablet landscape widths and a bottom-sheet lesson chooser at portrait widths. Playwright covers opening and closing the portrait navigator without introducing page overflow.
+- The input runner uses Pyodide's pinned stdin support for repeated line reads, captures prompts separately from program stdout, and behavior-checks the first input lesson with multiple hidden answers.

@@ -12,10 +12,11 @@ import {
 import { validateLesson } from './validators/lesson-validator'
 import type { PythonRunResult } from '../python/python-runner/types'
 
-const success = (stdout: string): PythonRunResult => ({
+const success = (stdout: string, inputTranscript: PythonRunResult['inputTranscript'] = []): PythonRunResult => ({
   status: 'success',
   stdout,
   stderr: '',
+  inputTranscript,
   durationMs: 4,
 })
 
@@ -118,14 +119,28 @@ describe('lesson validators', () => {
     expect(result.passed).toBe(true)
   })
 
-  it('validates the first input lesson from its browser-provided answer', async () => {
+  it('validates the first input lesson with multiple hidden answers', async () => {
     const lesson = getLessonById('ask-a-question')!
     const result = await validateLesson(lesson, {
       code: 'name = input("What is your name? ")\nprint("Hello", name)',
       execution: success('What is your name? Hello Alex\n'),
-      runValidationCode: async () => success(''),
+      runValidationCode: async (_code, request) => {
+        const answer = request?.input?.lines?.[0] ?? ''
+        return success(`Hello ${answer}\n`, [{ inputIndex: 0, prompt: 'What is your name? ', answer }])
+      },
     })
 
     expect(result).toEqual({ passed: true, message: 'Great work — your program used the answer.' })
+  })
+
+  it('does not pass input validation for hard-coded output', async () => {
+    const lesson = getLessonById('ask-a-question')!
+    const result = await validateLesson(lesson, {
+      code: 'print("Hello")',
+      execution: success('Hello\n'),
+      runValidationCode: async () => success('Hello\n'),
+    })
+
+    expect(result.passed).toBe(false)
   })
 })

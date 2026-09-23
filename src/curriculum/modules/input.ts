@@ -24,12 +24,15 @@ export const inputModule: Module = {
         'Save input("What is your name? ") in a variable called name.',
         'Print Hello and the name variable together.',
       ],
-      input: {
-        label: 'Answer for input()',
-        prompt: 'What is your name?',
-        defaultValue: 'Alex',
+      sampleInputs: ['Alex'],
+      validation: {
+        kind: 'behavior',
+        requirement: 'uses-input',
+        cases: [
+          { inputs: ['Ada'], expectedOutput: ['Hello Ada'] },
+          { inputs: ['Grace'], expectedOutput: ['Hello Grace'] },
+        ],
       },
-      validation: { kind: 'output', mode: 'contains', expected: ['Hello'] },
       status: 'ready',
     },
     futureLesson('save-an-answer', 2, 'Saving the answer', 'Keep an answer in a variable.', 'Save what the user types in a variable.'),

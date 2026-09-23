@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserPythonRunner } from './browser-python-runner'
-import type { PythonRunRequest, PythonRunResult } from './types'
+import { canUseInteractiveInput } from './input-channel'
+import type { PythonRunHandlers, PythonRunRequest, PythonRunResult } from './types'
 
 export type PythonRuntimeStatus = 'loading' | 'ready' | 'error'
 
@@ -8,6 +9,7 @@ export function usePythonRunner() {
   const runnerRef = useRef<BrowserPythonRunner | null>(null)
   const [runtimeStatus, setRuntimeStatus] = useState<PythonRuntimeStatus>('loading')
   const [runtimeError, setRuntimeError] = useState<string | undefined>()
+  const [interactiveInput] = useState(() => canUseInteractiveInput())
 
   useEffect(() => {
     const runner = new BrowserPythonRunner()
@@ -22,12 +24,14 @@ export function usePythonRunner() {
     return () => runner.dispose()
   }, [])
 
-  const run = useCallback(async (request: PythonRunRequest): Promise<PythonRunResult> => {
+  const run = useCallback(async (request: PythonRunRequest, handlers?: PythonRunHandlers): Promise<PythonRunResult> => {
     if (!runnerRef.current) {
-      return { status: 'error', stdout: '', stderr: '', error: 'Python is still preparing.', durationMs: 0 }
+      return { status: 'error', stdout: '', stderr: '', inputTranscript: [], error: 'Python is still preparing.', durationMs: 0 }
     }
-    return runnerRef.current.run(request)
+    return runnerRef.current.run(request, handlers)
   }, [])
 
-  return { run, runtimeStatus, runtimeError }
+  const cancel = useCallback(() => runnerRef.current?.cancel(), [])
+
+  return { run, cancel, interactiveInput, runtimeStatus, runtimeError }
 }

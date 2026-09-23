@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronRight, Code2, RotateCcw, Sparkles } from 'lucide-react'
 import { Button } from './components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
@@ -7,6 +7,7 @@ import { CodeEditor } from './features/lessons/components/code-editor'
 import { CurriculumNavigator } from './features/lessons/components/curriculum-navigator'
 import { HintPanel } from './features/lessons/components/hint-panel'
 import { OutputPanel } from './features/lessons/components/output-panel'
+import { InputPanel } from './features/python/components/input-panel'
 import {
   allLessons,
   curriculum,
@@ -19,11 +20,21 @@ import {
 import type { Lesson } from './curriculum/types'
 import { validateLesson } from './features/lessons/validators/lesson-validator'
 import { usePythonRunner } from './features/python/python-runner/use-python-runner'
-import type { PythonRunResult } from './features/python/python-runner/types'
+import type { PythonInputRequest, PythonRunResult } from './features/python/python-runner/types'
 import { createProgressRepository, type LearnerProgress } from './features/progress/progress-store'
 import './App.css'
 
-type WorkflowState = 'idle' | 'executing' | 'executionSucceeded' | 'executionFailed' | 'validating' | 'lessonPassed'
+type WorkflowState = 'idle' | 'executing' | 'waitingForInput' | 'executionSucceeded' | 'executionFailed' | 'validating' | 'lessonPassed'
+
+interface PendingInput {
+  request: PythonInputRequest
+  resolve: (answer: string) => void
+  reject: (error: Error) => void
+}
+
+function sampleInputText(lesson: Lesson): string {
+  return lesson.sampleInputs?.join('\n') ?? ''
+}
 
 function App() {
   const repository = useMemo(
@@ -36,17 +47,21 @@ function App() {
     const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
     return initialProgress.lessonCode[initialLesson.id] ?? initialLesson.starterCode
   })
-  const [inputValue, setInputValue] = useState(() => {
+  const [transcriptValue, setTranscriptValue] = useState(() => {
     const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
-    return initialLesson.input?.defaultValue ?? ''
+    return sampleInputText(initialLesson)
   })
   const [execution, setExecution] = useState<PythonRunResult | null>(null)
   const [lastRunCode, setLastRunCode] = useState<string | null>(null)
-  const [lastRunInput, setLastRunInput] = useState<string | null>(null)
+  const [lastRunInputKey, setLastRunInputKey] = useState<string | null>(null)
   const [validationMessage, setValidationMessage] = useState<{ passed: boolean; message: string } | null>(null)
   const [workflow, setWorkflow] = useState<WorkflowState>('idle')
   const [visibleHints, setVisibleHints] = useState(0)
-  const { run, runtimeStatus, runtimeError } = usePythonRunner()
+  const [pendingInput, setPendingInput] = useState<PendingInput | null>(null)
+  const [answerValue, setAnswerValue] = useState('')
+  const pendingInputRef = useRef<PendingInput | null>(null)
+  const operationId = useRef(0)
+  const { run, cancel, interactiveInput, runtimeStatus, runtimeError } = usePythonRunner()
 
   const activeLesson: Lesson = getLessonById(progress.currentLessonId) ?? allLessons[0]
   const activeLocation = getLessonLocation(activeLesson.id)
@@ -55,8 +70,9 @@ function App() {
   const nextLesson = getNextLesson(activeLesson.id)
   const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
   const nextActionLabel = nextLessonLocation?.module.id !== activeModule.id ? 'Next chapter' : 'Next lesson'
-  const isBusy = workflow === 'executing' || workflow === 'validating'
+  const isBusy = workflow === 'executing' || workflow === 'waitingForInput' || workflow === 'validating'
   const isCurrentCompleted = progress.completedLessonIds.includes(activeLesson.id)
+  const currentInputKey = interactiveInput ? 'interactive' : transcriptValue
 
   const updateProgress = useCallback((update: (current: LearnerProgress) => LearnerProgress) => {
     setProgress((current) => {
@@ -72,17 +88,23 @@ function App() {
     const previousLesson = getPreviousLesson(selected.id)
     const canOpen = !previousLesson || progress.completedLessonIds.includes(previousLesson.id)
     if (!canOpen) return
+    operationId.current += 1
+    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
+    pendingInputRef.current = null
+    cancel()
     setCode(progress.lessonCode[lessonId] ?? selected.starterCode)
-    setInputValue(selected.input?.defaultValue ?? '')
+    setTranscriptValue(sampleInputText(selected))
     setExecution(null)
     setLastRunCode(null)
-    setLastRunInput(null)
+    setLastRunInputKey(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
+    setPendingInput(null)
+    setAnswerValue('')
     window.scrollTo({ top: 0, behavior: 'auto' })
     updateProgress((current) => ({ ...current, currentLessonId: lessonId }))
-  }, [progress.completedLessonIds, progress.lessonCode, updateProgress])
+  }, [cancel, progress.completedLessonIds, progress.lessonCode, updateProgress])
 
   const handleCodeChange = (value: string) => {
     setCode(value)
@@ -93,27 +115,72 @@ function App() {
     setValidationMessage(null)
   }
 
+  const requestInput = useCallback((request: PythonInputRequest) => new Promise<string>((resolve, reject) => {
+    const pending = { request, resolve, reject }
+    pendingInputRef.current = pending
+    setAnswerValue('')
+    setPendingInput(pending)
+    setWorkflow('waitingForInput')
+  }), [])
+
+  const handleInputCancel = useCallback((message: string) => {
+    pendingInputRef.current?.reject(new Error(message))
+    pendingInputRef.current = null
+    setPendingInput(null)
+    setAnswerValue('')
+  }, [])
+
+  const handleSubmitAnswer = () => {
+    if (!pendingInput) return
+    const current = pendingInput
+    pendingInputRef.current = null
+    setPendingInput(null)
+    setAnswerValue('')
+    setWorkflow('executing')
+    current.resolve(answerValue)
+  }
+
+  const handleCancelRun = () => {
+    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
+    pendingInputRef.current = null
+    setPendingInput(null)
+    setAnswerValue('')
+    cancel()
+  }
+
   const handleRun = async () => {
+    const currentOperation = ++operationId.current
     setWorkflow('executing')
     setValidationMessage(null)
-    const result = await run({ code, stdin: activeLesson.input ? [inputValue] : [] })
+    const input = interactiveInput
+      ? { mode: 'interactive' as const }
+      : { mode: 'transcript' as const, lines: transcriptValue.length ? transcriptValue.split('\n') : [] }
+    const result = await run(
+      { code, input },
+      interactiveInput ? { onInputRequest: requestInput, onInputCancel: handleInputCancel } : undefined,
+    )
+    if (currentOperation !== operationId.current) return
     setExecution(result)
     setLastRunCode(code)
-    setLastRunInput(inputValue)
+    setLastRunInputKey(currentInputKey)
+    pendingInputRef.current = null
+    setPendingInput(null)
     setWorkflow(result.status === 'success' ? 'executionSucceeded' : 'executionFailed')
   }
 
   const handleCheck = async () => {
-    if (!execution || lastRunCode !== code || lastRunInput !== inputValue) {
+    if (!execution || lastRunCode !== code || lastRunInputKey !== currentInputKey) {
       setValidationMessage({ passed: false, message: 'Run this version of your code before checking it.' })
       return
     }
+    const currentOperation = ++operationId.current
     setWorkflow('validating')
     const result = await validateLesson(activeLesson, {
       code,
       execution,
-      runValidationCode: async (validationCode) => run({ code: validationCode }),
+      runValidationCode: async (validationCode, request) => run({ code: validationCode, ...request }),
     })
+    if (currentOperation !== operationId.current) return
     setValidationMessage(result)
     if (result.passed) {
       updateProgress((current) => ({
@@ -130,6 +197,7 @@ function App() {
 
   const handleResetCode = () => {
     setCode(activeLesson.starterCode)
+    setTranscriptValue(sampleInputText(activeLesson))
     updateProgress((current) => {
       const nextCode = { ...current.lessonCode }
       delete nextCode[activeLesson.id]
@@ -137,24 +205,32 @@ function App() {
     })
     setExecution(null)
     setLastRunCode(null)
-    setLastRunInput(null)
+    setLastRunInputKey(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
+    setPendingInput(null)
+    setAnswerValue('')
   }
 
   const handleResetProgress = () => {
     if (!window.confirm('Reset your lesson progress and saved code?')) return
+    operationId.current += 1
+    pendingInputRef.current?.reject(new Error('The input request was cancelled.'))
+    pendingInputRef.current = null
+    cancel()
     const next = repository.reset()
     setProgress(next)
     setCode(allLessons[0].starterCode)
-    setInputValue(allLessons[0].input?.defaultValue ?? '')
+    setTranscriptValue(sampleInputText(allLessons[0]))
     setExecution(null)
     setLastRunCode(null)
-    setLastRunInput(null)
+    setLastRunInputKey(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
+    setPendingInput(null)
+    setAnswerValue('')
   }
 
   const handleNextLesson = () => {
@@ -236,25 +312,19 @@ function App() {
               </CardHeader>
               <CardContent>
                 <label htmlFor="python-editor" className="sr-only">Your Python code</label>
-                {activeLesson.input ? (
-                  <div className="mb-4 rounded-xl border border-line bg-mist/60 p-3.5">
-                    <label htmlFor="lesson-input" className="block text-xs font-bold uppercase tracking-[0.12em] text-muted">{activeLesson.input.label}</label>
-                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-line bg-white px-3 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/20">
-                      <span className="shrink-0 text-sm text-muted" aria-hidden="true">{activeLesson.input.prompt}</span>
-                      <input
-                        id="lesson-input"
-                        aria-label={activeLesson.input.label}
-                        className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-ink outline-none placeholder:text-muted/70"
-                        value={inputValue}
-                        onChange={(event) => {
-                          setInputValue(event.target.value)
-                          setValidationMessage(null)
-                        }}
-                      />
-                    </div>
-                    <p className="mt-2 text-xs text-muted">Python will receive this answer when you run the code.</p>
-                  </div>
-                ) : null}
+                <InputPanel
+                  interactive={interactiveInput}
+                  transcriptValue={transcriptValue}
+                  onTranscriptChange={(value) => {
+                    setTranscriptValue(value)
+                    setValidationMessage(null)
+                  }}
+                  pendingRequest={pendingInput?.request ?? null}
+                  answerValue={answerValue}
+                  onAnswerChange={setAnswerValue}
+                  onSubmitAnswer={handleSubmitAnswer}
+                  onCancelRun={handleCancelRun}
+                />
                 <div id="python-editor">
                   <CodeEditor value={code} onChange={handleCodeChange} />
                 </div>
@@ -267,7 +337,7 @@ function App() {
                   </Button>
                   <Button type="button" variant="quiet" size="lg" onClick={handleResetCode} disabled={isBusy}>Reset code</Button>
                   <span className="basis-full text-xs text-muted sm:basis-auto sm:ml-auto">
-                    {runtimeStatus === 'loading' ? 'Preparing Python…' : runtimeStatus === 'error' ? 'Python could not start.' : 'Python runs in your browser.'}
+                    {runtimeStatus === 'loading' ? 'Preparing Python…' : runtimeStatus === 'error' ? 'Python could not start.' : interactiveInput ? 'Live input is ready.' : 'Use one line per input.'}
                   </span>
                 </div>
                 {runtimeStatus === 'error' && runtimeError ? <p className="mt-3 text-sm text-coral" role="alert">{runtimeError}</p> : null}

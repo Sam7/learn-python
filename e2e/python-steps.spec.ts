@@ -21,11 +21,19 @@ async function setEditorCode(page: import('@playwright/test').Page, code: string
   }
 }
 
-async function setLessonInput(page: import('@playwright/test').Page, value: string) {
-  await page.getByRole('textbox', { name: 'Answer for input()' }).fill(value)
+async function answerLivePrompt(page: import('@playwright/test').Page, value: string, answerNumber = 1) {
+  const answer = page.getByRole('textbox', { name: `Answer ${answerNumber}` })
+  await expect(answer).toBeVisible()
+  await answer.fill(value)
+  await page.getByRole('button', { name: /Send answer/ }).click()
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (window.location.search.includes('transcript-fallback')) {
+      Object.defineProperty(window, 'crossOriginIsolated', { configurable: true, value: false })
+    }
+  })
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
@@ -81,9 +89,9 @@ test('the available learning path reaches the next chapter', async ({ page, brow
   ]
 
   for (const lesson of lessonsToComplete) {
-    if (lesson.input) await setLessonInput(page, lesson.input)
     await setEditorCode(page, lesson.code)
     await page.getByRole('button', { name: /Run code/ }).click()
+    if (lesson.input) await answerLivePrompt(page, lesson.input)
     const lessonOutput = page.getByRole('region', { name: 'Python output' })
     await expect(lessonOutput).toContainText(/.+/, { timeout: 20_000 })
     await page.getByRole('button', { name: /Check answer/ }).click()
@@ -100,6 +108,66 @@ test('the available learning path reaches the next chapter', async ({ page, brow
   }
 
   await expect(page.getByText('Chapter complete')).toBeVisible()
+})
+
+test('interactive input supports multiple prompts and line reads', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Interactive stdin is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+  await waitForPython(page)
+  await setEditorCode(page, 'first = input("First? ")\nsecond = input("Second? ")\nprint(first)\nprint(second)')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  await expect(page.getByRole('region', { name: 'Python is waiting for input' })).toBeVisible()
+  await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-input-prompt.png`, fullPage: false })
+  await answerLivePrompt(page, 'Ada')
+  await answerLivePrompt(page, 'Python', 2)
+  const output = page.getByRole('region', { name: 'Python output' })
+  await expect(output).toContainText('First? Ada')
+  await expect(output).toContainText('Second? Python')
+  await expect(output).toContainText('Ada')
+  await expect(output).toContainText('Python')
+
+  await setEditorCode(page, 'import sys\nfirst = sys.stdin.readline().strip()\nsecond = sys.stdin.readline().strip()\nprint(first, second)')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  await answerLivePrompt(page, 'one')
+  await answerLivePrompt(page, 'two', 2)
+  await expect(output).toContainText('one two')
+})
+
+test('an interactive run can be cancelled while waiting for input', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Interactive cancellation is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+  await waitForPython(page)
+  await setEditorCode(page, 'name = input("Your name? ")\nprint(name)')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  await expect(page.getByRole('region', { name: 'Python is waiting for input' })).toBeVisible()
+  await page.getByRole('button', { name: /Cancel/ }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('cancelled')
+  await expect(page.getByRole('button', { name: /Run code/ })).toBeEnabled()
+
+  await setEditorCode(page, 'print("recovered")')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('recovered', { timeout: 15_000 })
+})
+
+test('transcript input fallback supports multiple answers', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Fallback stdin is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+  await page.goto('/?transcript-fallback')
+  await waitForPython(page)
+  await expect(page.getByRole('textbox', { name: 'Program input' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Program input' }).fill('one\ntwo')
+  await setEditorCode(page, 'import sys\nfirst = sys.stdin.readline().strip()\nsecond = sys.stdin.readline().strip()\nprint(first, second)')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('one two', { timeout: 20_000 })
+})
+
+test('transcript input explains when Python needs another answer', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Fallback EOF is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
+  await page.goto('/?transcript-fallback')
+  await waitForPython(page)
+  await page.getByRole('textbox', { name: 'Program input' }).fill('only one')
+  await setEditorCode(page, 'first = input("First? ")\nsecond = input("Second? ")\nprint(first, second)')
+  await page.getByRole('button', { name: /Run code/ }).click()
+  const output = page.getByRole('region', { name: 'Python output' })
+  await expect(output).toContainText('Python asked for another answer', { timeout: 20_000 })
+  await expect(output).toContainText('EOF when reading a line')
 })
 
 test('selected code keeps a readable light foreground', async ({ page, browserName }, testInfo) => {

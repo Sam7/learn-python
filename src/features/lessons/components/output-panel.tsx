@@ -8,8 +8,8 @@ interface OutputPanelProps {
 }
 
 export function OutputPanel({ execution, isRunning }: OutputPanelProps) {
-  const hasOutput = Boolean(execution?.stdout || execution?.stderr)
-  const isError = execution?.status === 'error' || execution?.status === 'timeout'
+  const hasOutput = Boolean(execution?.stdout || execution?.stderr || execution?.inputTranscript.length)
+  const isError = execution?.status === 'error' || execution?.status === 'timeout' || execution?.status === 'cancelled'
 
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-white" aria-live="polite" aria-label="Python output">
@@ -29,12 +29,16 @@ export function OutputPanel({ execution, isRunning }: OutputPanelProps) {
           <p className="text-sm leading-6 text-muted">Run your code to see what Python says.</p>
         ) : isError ? (
           <div>
-            <p className="mb-3 text-sm font-semibold text-coral">Python couldn’t run this yet. Take a look at the error below.</p>
+            <p className="mb-3 text-sm font-semibold text-coral">{friendlyError(execution)}</p>
+            {execution.inputTranscript.length ? (
+              <InputTranscript entries={execution.inputTranscript} />
+            ) : null}
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-[#fff7f3] p-3 font-mono text-xs leading-5 text-[#7e3e30]">{execution.error || execution.stderr || 'Python reported an unknown error.'}</pre>
           </div>
         ) : hasOutput ? (
           <div>
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-7 text-ink">{execution.stdout}</pre>
+            <InputTranscript entries={execution.inputTranscript} />
+            {execution.stdout ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-7 text-ink">{execution.stdout}</pre> : null}
             <p className="mt-3 text-xs text-muted">Finished in {execution.durationMs} ms</p>
           </div>
         ) : (
@@ -42,5 +46,31 @@ export function OutputPanel({ execution, isRunning }: OutputPanelProps) {
         )}
       </div>
     </section>
+  )
+}
+
+function friendlyError(execution: PythonRunResult): string {
+  if (execution.status === 'cancelled') return 'The run was cancelled.'
+  if (execution.error?.includes('EOF when reading a line')) {
+    return 'Python asked for another answer. Add another line of input and run it again.'
+  }
+  if (execution.status === 'timeout' && execution.error?.includes('answer')) {
+    return 'Python waited for an answer for too long. Run it again when you are ready.'
+  }
+  return 'Python couldn’t run this yet. Take a look at the error below.'
+}
+
+function InputTranscript({ entries }: { entries: PythonRunResult['inputTranscript'] }) {
+  if (!entries.length) return null
+
+  return (
+    <div className="mb-3 rounded-xl bg-[#f7faf8] p-3 font-mono text-xs leading-6 text-muted">
+      {entries.map((entry) => (
+        <div key={entry.inputIndex}>
+          <span className="text-teal-dark">{entry.prompt || 'Input'} </span>
+          <span className="text-ink">{entry.answer}</span>
+        </div>
+      ))}
+    </div>
   )
 }
