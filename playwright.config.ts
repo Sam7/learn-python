@@ -5,6 +5,10 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
+  // Pyodide is initialized inside every browser context. Serializing the
+  // suite avoids competing CDN/runtime downloads and keeps readiness tests
+  // deterministic on local and Vercel-like machines.
+  workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:5173',

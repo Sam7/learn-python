@@ -4,6 +4,7 @@ const PYODIDE_MODULE_URL = `${PYODIDE_INDEX_URL}pyodide.mjs`
 
 interface PyodideRuntime {
   runPythonAsync(code: string): Promise<unknown>
+  setStdin(config: { stdin: () => string }): void
   setStdout(config: { batched: (text: string) => void }): void
   setStderr(config: { batched: (text: string) => void }): void
 }
@@ -13,7 +14,7 @@ interface PyodideModule {
 }
 
 export type WorkerRequest =
-  | { type: 'run'; requestId: number; code: string }
+  | { type: 'run'; requestId: number; code: string; stdin: string[] }
   | { type: 'reset'; requestId: number }
 
 export type WorkerResponse =
@@ -59,13 +60,15 @@ async function prepareRuntime() {
   }
 }
 
-async function runPython(requestId: number, code: string) {
+async function runPython(requestId: number, code: string, stdin: string[]) {
   const startedAt = performance.now()
   const stdout: string[] = []
   const stderr: string[] = []
+  let inputIndex = 0
 
   try {
     const pyodide = await getRuntime()
+    pyodide.setStdin({ stdin: () => stdin[inputIndex++] ?? '' })
     pyodide.setStdout({ batched: (text) => stdout.push(`${text}\n`) })
     pyodide.setStderr({ batched: (text) => stderr.push(`${text}\n`) })
     await pyodide.runPythonAsync(code)
@@ -92,7 +95,7 @@ async function runPython(requestId: number, code: string) {
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (event.data.type === 'run') {
-    void runPython(event.data.requestId, event.data.code)
+    void runPython(event.data.requestId, event.data.code, event.data.stdin)
     return
   }
 

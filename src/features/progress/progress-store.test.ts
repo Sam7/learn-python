@@ -44,14 +44,14 @@ describe('progress persistence', () => {
   it('does not restore a future lesson as the active lesson', () => {
     const progress = normalizeProgress({
       version: 1,
-      currentLessonId: 'ask-a-question',
-      completedLessonIds: ['ask-a-question', 'saying-something'],
-      lessonCode: { 'ask-a-question': '# saved for later' },
+      currentLessonId: 'save-an-answer',
+      completedLessonIds: ['save-an-answer', 'saying-something'],
+      lessonCode: { 'save-an-answer': '# saved for later' },
     }, allLessons)
 
     expect(progress.currentLessonId).toBe('saying-something')
     expect(progress.completedLessonIds).toEqual(['saying-something'])
-    expect(progress.lessonCode).toEqual({ 'ask-a-question': '# saved for later' })
+    expect(progress.lessonCode).toEqual({ 'save-an-answer': '# saved for later' })
   })
 
   it('saves, loads, and resets through the repository boundary', () => {

@@ -16,7 +16,7 @@
 
 - Pyodide is loaded from a pinned CDN URL behind the `PythonRunner` boundary so it can be self-hosted later.
 - Lesson content is plain data plus small named validation definitions; the application shell does not know lesson-specific rules.
-- The curriculum is owned by `src/curriculum/`; the lesson feature consumes it through typed lookup/progression helpers. The first five fundamentals lessons are available and the remaining pathway is structured as future lesson data.
+- The curriculum is owned by `src/curriculum/`; the lesson feature consumes it through typed lookup/progression helpers. The first five fundamentals lessons and the first input lesson are available, and the remaining pathway is structured as future lesson data.
 - The progress repository accepts the complete curriculum so saved code remains compatible with future lessons while current/completed navigation only uses available lessons.
 - The page uses natural document scrolling with `min-height: 100dvh` rather than trapping the learner in a fixed-height editor workspace.
 - Local UI primitives follow shadcn/ui conventions and are deliberately small for this focused product.

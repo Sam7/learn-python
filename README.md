@@ -22,7 +22,7 @@ npm run build            # TypeScript check and production build
 npm run test:e2e         # Playwright: Chromium + WebKit tablet projects
 ```
 
-The Playwright suite starts Vite automatically when needed. It covers the first learner journey, the five available fundamentals lessons, invalid Python, timeout recovery, refresh persistence, desktop layout, and iPad portrait/landscape viewport behaviour. Screenshots are written to `artifacts/screenshots/` when the screenshot tests are run.
+The Playwright suite starts Vite automatically when needed. It covers the first learner journey, the five fundamentals lessons, the first input lesson, invalid Python, timeout recovery, refresh persistence, desktop layout, and iPad portrait/landscape viewport behaviour. Screenshots are written to `artifacts/screenshots/` when the screenshot tests are run.
 
 The automated WebKit checks cannot reproduce every physical iPad software-keyboard behaviour. Before a public launch, also test Safari on a real iPad: focus the editor, type with the keyboard open, dismiss the keyboard, run the code, and continue to the next lesson in both orientations.
 
@@ -39,7 +39,7 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 ## Project shape
 
-- `src/curriculum/` contains the typed curriculum, seven initial modules, and lesson definitions. The first five fundamentals lessons are available; later lessons are represented as structured `coming-soon` data.
+- `src/curriculum/` contains the typed curriculum, seven initial modules, and lesson definitions. The first five fundamentals lessons and the first input lesson are available; later lessons are represented as structured `coming-soon` data.
 - `src/features/lessons/` contains curriculum-agnostic rendering, navigation, and validation.
 - `src/features/lessons/validators/` contains pure/output/AST-backed validation strategies.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.

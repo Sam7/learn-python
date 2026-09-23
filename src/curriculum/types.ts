@@ -7,9 +7,15 @@ export interface LessonContent {
   notes?: string[]
 }
 
+export interface LessonInput {
+  label: string
+  prompt: string
+  defaultValue: string
+}
+
 export type OutputValidation = {
   kind: 'output'
-  mode: 'exact' | 'lines' | 'non-empty'
+  mode: 'exact' | 'lines' | 'contains' | 'non-empty'
   expected?: string[]
   lineCount?: number
   reject?: string[]
@@ -38,6 +44,7 @@ export interface Lesson {
   starterCode: string
   task: string
   hints: string[]
+  input?: LessonInput
   validation: LessonValidation
   status: LessonStatus
 }

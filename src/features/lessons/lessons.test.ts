@@ -22,12 +22,20 @@ const success = (stdout: string): PythonRunResult => ({
 describe('lesson catalogue', () => {
   it('keeps modules and lessons ordered and retrievable by id', () => {
     expect(modules.map((module) => module.order)).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(readyLessons.map((lesson) => lesson.order)).toEqual([1, 2, 3, 4, 5])
+    expect(readyLessons.map((lesson) => lesson.id)).toEqual([
+      'saying-something',
+      'your-own-text',
+      'numbers-and-maths',
+      'variables',
+      'values-in-sentences',
+      'ask-a-question',
+    ])
     expect(getLessonById('your-own-text')?.order).toBe(2)
     expect(getLessonLocation('numbers-and-maths')?.module.id).toBe('fundamentals')
     expect(getNextLesson('saying-something')?.id).toBe('your-own-text')
     expect(getNextLesson('variables')?.id).toBe('values-in-sentences')
-    expect(allLessons.find((lesson) => lesson.id === 'ask-a-question')?.status).toBe('coming-soon')
+    expect(getNextLesson('values-in-sentences')?.id).toBe('ask-a-question')
+    expect(allLessons.find((lesson) => lesson.id === 'save-an-answer')?.status).toBe('coming-soon')
   })
 
   it('derives module progress from curriculum data', () => {
@@ -108,5 +116,16 @@ describe('lesson validators', () => {
     })
 
     expect(result.passed).toBe(true)
+  })
+
+  it('validates the first input lesson from its browser-provided answer', async () => {
+    const lesson = getLessonById('ask-a-question')!
+    const result = await validateLesson(lesson, {
+      code: 'name = input("What is your name? ")\nprint("Hello", name)',
+      execution: success('What is your name? Hello Alex\n'),
+      runValidationCode: async () => success(''),
+    })
+
+    expect(result).toEqual({ passed: true, message: 'Great work — your program used the answer.' })
   })
 })

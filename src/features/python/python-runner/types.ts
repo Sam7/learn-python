@@ -2,6 +2,7 @@ export type PythonRunStatus = 'success' | 'error' | 'timeout'
 
 export interface PythonRunRequest {
   code: string
+  stdin?: string[]
   timeoutMs?: number
 }
 

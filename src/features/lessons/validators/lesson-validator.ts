@@ -15,7 +15,7 @@ function validateOutput(lesson: Lesson, context: LessonValidationContext): Valid
   }
 
   const stdout = context.execution.stdout.replace(/\r\n/g, '\n').trimEnd()
-  if (definition.reject?.includes(stdout)) {
+  if (definition.reject?.some((rejectedOutput) => stdout.includes(rejectedOutput))) {
     return { passed: false, message: 'That is the example answer. Change the text and make it your own.' }
   }
 
@@ -31,6 +31,13 @@ function validateOutput(lesson: Lesson, context: LessonValidationContext): Valid
     return lines.length === definition.lineCount && lines.every((line) => line.trim().length > 0)
       ? { passed: true, message: 'Great work — both lines are there.' }
       : { passed: false, message: 'Make sure your program prints two non-empty lines.' }
+  }
+
+  if (definition.mode === 'contains') {
+    const expected = definition.expected ?? []
+    return expected.every((value) => stdout.includes(value))
+      ? { passed: true, message: 'Great work — your program used the answer.' }
+      : { passed: false, message: 'Make sure your program uses the answer in its greeting.' }
   }
 
   return lines.length > 0

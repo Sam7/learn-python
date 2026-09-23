@@ -98,7 +98,7 @@ export class BrowserPythonRunner implements PythonRunner {
     await this.readyPromise
   }
 
-  async run({ code, timeoutMs = DEFAULT_TIMEOUT_MS }: PythonRunRequest): Promise<PythonRunResult> {
+  async run({ code, stdin = [], timeoutMs = DEFAULT_TIMEOUT_MS }: PythonRunRequest): Promise<PythonRunResult> {
     try {
       await this.prepare()
     } catch (error) {
@@ -133,7 +133,7 @@ export class BrowserPythonRunner implements PythonRunner {
         })
       }, timeoutMs)
       this.pending.set(requestId, { resolve, timer })
-      worker.postMessage({ type: 'run', requestId, code })
+      worker.postMessage({ type: 'run', requestId, code, stdin })
     })
   }
 

@@ -21,6 +21,10 @@ async function setEditorCode(page: import('@playwright/test').Page, code: string
   }
 }
 
+async function setLessonInput(page: import('@playwright/test').Page, value: string) {
+  await page.getByRole('textbox', { name: 'Answer for input()' }).fill(value)
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
@@ -63,19 +67,21 @@ test('refresh restores the active lesson and edited code', async ({ page, browse
   await expect(page.locator('.cm-content')).toContainText('books')
 })
 
-test('the five available fundamentals lessons form a complete progressive path', async ({ page, browserName }) => {
+test('the available learning path reaches the next chapter', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Source editing is covered in Chromium; WebKit is used for tablet layout/focus coverage.')
   await waitForPython(page)
 
   const lessonsToComplete = [
-    { code: 'print("Hello Python!")', next: 'Printing your own text' },
-    { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths' },
-    { code: 'print(12 + 8)', next: 'Remembering things' },
-    { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences' },
-    { code: 'favourite_food = "mango"\nprint("My favourite food is", favourite_food)', next: undefined },
+    { code: 'print("Hello Python!")', next: 'Printing your own text', button: 'Next lesson' },
+    { code: 'print("Sam")\nprint("noodles")', next: 'Numbers and maths', button: 'Next lesson' },
+    { code: 'print(12 + 8)', next: 'Remembering things', button: 'Next lesson' },
+    { code: 'favourite_food = "mango"\nprint(favourite_food)', next: 'Putting values into sentences', button: 'Next lesson' },
+    { code: 'favourite_food = "mango"\nprint("My favourite food is", favourite_food)', next: 'Asking a question', button: 'Next chapter' },
+    { code: 'name = input("What is your name? ")\nprint("Hello", name)', input: 'Sam', next: undefined, button: undefined },
   ]
 
   for (const lesson of lessonsToComplete) {
+    if (lesson.input) await setLessonInput(page, lesson.input)
     await setEditorCode(page, lesson.code)
     await page.getByRole('button', { name: /Run code/ }).click()
     const lessonOutput = page.getByRole('region', { name: 'Python output' })
@@ -83,8 +89,13 @@ test('the five available fundamentals lessons form a complete progressive path',
     await page.getByRole('button', { name: /Check answer/ }).click()
     await expect(page.getByRole('status')).toContainText('Great work')
     if (lesson.next) {
-      await page.getByRole('button', { name: /Next lesson/ }).click()
+      await page.getByRole('button', { name: new RegExp(lesson.button ?? 'Next lesson') }).click()
       await expect(page.getByRole('heading', { name: lesson.next })).toBeVisible()
+      if (lesson.button === 'Next chapter') {
+        await expect(page.locator('.cm-content')).toContainText('input')
+        await expect(page.locator('.cm-content')).not.toContainText('favourite_food')
+        await page.screenshot({ path: `artifacts/screenshots/${testInfo.project.name}-next-chapter.png`, fullPage: true })
+      }
     }
   }
 

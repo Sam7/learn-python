@@ -36,8 +36,13 @@ function App() {
     const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
     return initialProgress.lessonCode[initialLesson.id] ?? initialLesson.starterCode
   })
+  const [inputValue, setInputValue] = useState(() => {
+    const initialLesson = getLessonById(initialProgress.currentLessonId) ?? allLessons[0]
+    return initialLesson.input?.defaultValue ?? ''
+  })
   const [execution, setExecution] = useState<PythonRunResult | null>(null)
   const [lastRunCode, setLastRunCode] = useState<string | null>(null)
+  const [lastRunInput, setLastRunInput] = useState<string | null>(null)
   const [validationMessage, setValidationMessage] = useState<{ passed: boolean; message: string } | null>(null)
   const [workflow, setWorkflow] = useState<WorkflowState>('idle')
   const [visibleHints, setVisibleHints] = useState(0)
@@ -48,6 +53,8 @@ function App() {
   const activeModule = activeLocation?.module ?? curriculum.modules[0]
   const moduleProgress = getModuleProgress(activeModule, progress.completedLessonIds)
   const nextLesson = getNextLesson(activeLesson.id)
+  const nextLessonLocation = nextLesson ? getLessonLocation(nextLesson.id) : undefined
+  const nextActionLabel = nextLessonLocation?.module.id !== activeModule.id ? 'Next chapter' : 'Next lesson'
   const isBusy = workflow === 'executing' || workflow === 'validating'
   const isCurrentCompleted = progress.completedLessonIds.includes(activeLesson.id)
 
@@ -66,11 +73,14 @@ function App() {
     const canOpen = !previousLesson || progress.completedLessonIds.includes(previousLesson.id)
     if (!canOpen) return
     setCode(progress.lessonCode[lessonId] ?? selected.starterCode)
+    setInputValue(selected.input?.defaultValue ?? '')
     setExecution(null)
     setLastRunCode(null)
+    setLastRunInput(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
+    window.scrollTo({ top: 0, behavior: 'auto' })
     updateProgress((current) => ({ ...current, currentLessonId: lessonId }))
   }, [progress.completedLessonIds, progress.lessonCode, updateProgress])
 
@@ -86,14 +96,15 @@ function App() {
   const handleRun = async () => {
     setWorkflow('executing')
     setValidationMessage(null)
-    const result = await run({ code })
+    const result = await run({ code, stdin: activeLesson.input ? [inputValue] : [] })
     setExecution(result)
     setLastRunCode(code)
+    setLastRunInput(inputValue)
     setWorkflow(result.status === 'success' ? 'executionSucceeded' : 'executionFailed')
   }
 
   const handleCheck = async () => {
-    if (!execution || lastRunCode !== code) {
+    if (!execution || lastRunCode !== code || lastRunInput !== inputValue) {
       setValidationMessage({ passed: false, message: 'Run this version of your code before checking it.' })
       return
     }
@@ -126,6 +137,7 @@ function App() {
     })
     setExecution(null)
     setLastRunCode(null)
+    setLastRunInput(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
@@ -136,8 +148,10 @@ function App() {
     const next = repository.reset()
     setProgress(next)
     setCode(allLessons[0].starterCode)
+    setInputValue(allLessons[0].input?.defaultValue ?? '')
     setExecution(null)
     setLastRunCode(null)
+    setLastRunInput(null)
     setValidationMessage(null)
     setWorkflow('idle')
     setVisibleHints(0)
@@ -222,6 +236,25 @@ function App() {
               </CardHeader>
               <CardContent>
                 <label htmlFor="python-editor" className="sr-only">Your Python code</label>
+                {activeLesson.input ? (
+                  <div className="mb-4 rounded-xl border border-line bg-mist/60 p-3.5">
+                    <label htmlFor="lesson-input" className="block text-xs font-bold uppercase tracking-[0.12em] text-muted">{activeLesson.input.label}</label>
+                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-line bg-white px-3 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/20">
+                      <span className="shrink-0 text-sm text-muted" aria-hidden="true">{activeLesson.input.prompt}</span>
+                      <input
+                        id="lesson-input"
+                        aria-label={activeLesson.input.label}
+                        className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-ink outline-none placeholder:text-muted/70"
+                        value={inputValue}
+                        onChange={(event) => {
+                          setInputValue(event.target.value)
+                          setValidationMessage(null)
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-muted">Python will receive this answer when you run the code.</p>
+                  </div>
+                ) : null}
                 <div id="python-editor">
                   <CodeEditor value={code} onChange={handleCodeChange} />
                 </div>
@@ -256,10 +289,10 @@ function App() {
                   <p className="flex items-center gap-2 text-sm font-bold text-teal-dark"><Check size={17} aria-hidden="true" /> Lesson complete</p>
                   <p className="mt-1 text-sm leading-6 text-muted">You can revisit this step any time.</p>
                 </div>
-                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>Next lesson <ChevronRight size={18} aria-hidden="true" /></Button> : (
+                {nextLesson ? <Button type="button" size="lg" onClick={handleNextLesson}>{nextActionLabel} <ChevronRight size={18} aria-hidden="true" /></Button> : (
                   <div className="text-left sm:text-right">
                     <p className="text-sm font-semibold text-teal-dark">Chapter complete</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">You finished the available fundamentals lessons. More lessons are coming soon.</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">You finished the available lessons in {activeModule.title}. More lessons are coming soon.</p>
                   </div>
                 )}
               </div>
