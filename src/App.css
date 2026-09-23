@@ -1,0 +1,20 @@
+#root {
+  min-height: 100dvh;
+}
+
+/* CodeMirror keeps the editor usable when the iPad keyboard reduces the visual viewport. */
+.cm-editor {
+  max-width: 100%;
+}
+
+.cm-scroller {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@supports not (min-height: 100dvh) {
+  body,
+  #root {
+    min-height: 100vh;
+  }
+}
