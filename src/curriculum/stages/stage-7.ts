@@ -301,10 +301,10 @@ export const stageSeven: Stage = {
             id: 'keep-asking-for-an-acceptable-age',
             kind: 'code',
             title: 'Ask again for a valid age',
-            prompt: 'Ask for an age. While it is negative, ask again. Print the accepted age.',
+            prompt: 'The current update sets age to 0 instead of asking again. Replace it so a negative age causes another question.',
             required: true,
             sampleInputs: ['-1', '12'],
-            starterCode: 'age = int(input("Age: "))\nwhile age < 0:\n    # Ask again and update age\n    pass\n\nprint(age)',
+            starterCode: 'age = int(input("Age: "))\nwhile age < 0:\n    age = 0\n\nprint(age)',
             assessment: {
               kind: 'behavior',
               cases: [

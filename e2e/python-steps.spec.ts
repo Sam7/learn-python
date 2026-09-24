@@ -41,15 +41,16 @@ async function runStarterWithAnswers(page: Page, answers: string[]) {
   await expect(page.getByRole('status')).toContainText('Great work', { timeout: 30_000 })
 }
 
-async function finishTrace(page: Page) {
+async function finishTrace(page: Page, testInfo?: TestInfo, screenshotLabel?: string) {
   await page.getByRole('button', { name: 'Run and trace' }).click()
   await expect(page.getByRole('button', { name: 'Next execution step' })).toBeVisible({ timeout: 20_000 })
+  if (testInfo && screenshotLabel) await capture(page, testInfo, screenshotLabel)
   for (let step = 0; step < 100; step += 1) {
     if (await page.getByRole('button', { name: 'Finish trace' }).isVisible().catch(() => false)) break
     await page.getByRole('button', { name: 'Next execution step' }).click()
   }
   await page.getByRole('button', { name: 'Finish trace' }).click()
-  await expect(page.getByRole('button', { name: 'Next step' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /Next (step|lesson)/ })).toBeEnabled()
 }
 
 async function answerLivePrompt(page: Page, value: string, answerNumber: number) {
@@ -406,6 +407,7 @@ test('Stage 3: comparisons and decision paths work through the full chapter', as
   await runAndExpectPass(page, 'print(9 >= 8)\nprint(9 != 8)')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
+  await runUnchangedStarterAndExpectBlocked(page)
   await runAndExpectPass(page, 'is_raining = True\nprint(is_raining)')
   await page.getByRole('button', { name: 'Next step' }).click()
   const booleanPrediction = page.getByRole('textbox', { name: 'Your output prediction' })
@@ -439,28 +441,32 @@ test('Stage 3: comparisons and decision paths work through the full chapter', as
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python took the “The Teen path” path')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['14'])
+  await runUnchangedStarterAndExpectBlocked(page, ['14'])
+  await runAndExpectPass(page, 'age = int(input("Age? "))\nif age >= 13:\n    print("Teen")\nelse:\n    print("Child")', ['14'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await prediction.fill('False False\nFalse True\nTrue True')
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python printed False False')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['13'])
+  await runUnchangedStarterAndExpectBlocked(page, ['13'])
+  await runAndExpectPass(page, 'age = int(input("Age? "))\nprint(age > 13)\nprint(age >= 13)', ['13'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await page.getByRole('radio', { name: 'Silver' }).check()
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python took the “Silver” path')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['72'])
+  await runUnchangedStarterAndExpectBlocked(page, ['72'])
+  await runAndExpectPass(page, 'score = int(input("Score? "))\nif score >= 80:\n    print("Gold")\nelif score >= 60:\n    print("Silver")\nelse:\n    print("Bronze")', ['72'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await page.getByRole('radio', { name: 'The ride message runs' }).check()
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python took the “The ride message runs” path')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['12', '145'])
+  await runUnchangedStarterAndExpectBlocked(page, ['12', '145'])
+  await runAndExpectPass(page, 'age = int(input("Age? "))\nheight = int(input("Height? "))\nif age >= 10 and height >= 140:\n    print("You can ride")\nelse:\n    print("Not yet")', ['12', '145'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   const tableAnswers = ['School', 'No school', 'No school', 'No school']
@@ -469,17 +475,20 @@ test('Stage 3: comparisons and decision paths work through the full chapter', as
     if (index < tableAnswers.length - 1) await page.getByRole('button', { name: 'Next step' }).click()
   }
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['no', 'no'])
+  await runUnchangedStarterAndExpectBlocked(page, ['no', 'no'])
+  await runAndExpectPass(page, 'is_weekend = input("Weekend? ").strip().lower() == "yes"\nis_holiday = input("Holiday? ").strip().lower() == "yes"\nif is_weekend or is_holiday:\n    print("No school")\nelse:\n    print("School")', ['no', 'no'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await page.getByRole('radio', { name: 'Door can open' }).check()
   await page.getByRole('button', { name: 'Run and compare' }).click()
   await expect(page.getByRole('status')).toContainText('Correct — Python took the “Door can open” path')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, ['no'])
+  await runUnchangedStarterAndExpectBlocked(page, ['no'])
+  await runAndExpectPass(page, 'is_locked = input("Is it locked? ").strip().lower() == "yes"\nif not is_locked:\n    print("Door can open")\nelse:\n    print("Keep it closed")', ['no'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  await runStarterWithAnswers(page, ['32', 'no'])
+  await runUnchangedStarterAndExpectBlocked(page, ['32', 'no'])
+  await runAndExpectPass(page, 'temperature = int(input("Temperature? "))\nis_raining = input("Is it raining? ").strip().lower() == "yes"\nif temperature >= 30 and not is_raining:\n    print("Wear a hat and take water.")\nelif is_raining:\n    print("Take an umbrella.")\nelif temperature < 15:\n    print("Wear something warm.")\nelse:\n    print("Enjoy the weather.")', ['32', 'no'])
   await expect(page.getByRole('button', { name: /Decisions Stage complete/ })).toContainText('10/10 ready')
   await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
   await page.getByRole('button', { name: 'Next stage' }).click()
@@ -498,7 +507,7 @@ test('Stage 4: repetition and changing loop state work through the full chapter'
   await runAndExpectPass(page, 'print("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")\nprint("Jump!")')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  await runStarterWithAnswers(page, [])
+  await finishTrace(page, testInfo, 'stage-4-repeat-five-trace-desktop')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   const prediction = page.getByRole('textbox', { name: 'Your output prediction' })
@@ -548,7 +557,8 @@ test('Stage 4: repetition and changing loop state work through the full chapter'
   await page.getByRole('button', { name: 'count becomes 0, so count > 0 is False.' }).click()
   await expect(page.getByRole('status')).toContainText('repeated subtraction eventually makes the condition False')
   await page.getByRole('button', { name: 'Next step' }).click()
-  await runStarterWithAnswers(page, [])
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'count = 3\nwhile count > 0:\n    print(count)\n    count = count - 1\nprint("Go!")')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   await page.getByRole('button', { name: 'Run code' }).click()
@@ -560,10 +570,12 @@ test('Stage 4: repetition and changing loop state work through the full chapter'
   await expect(page.getByRole('status')).toContainText('count needs to change')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  await runStarterWithAnswers(page, ['ruby', 'python'])
+  await runUnchangedStarterAndExpectBlocked(page, ['ruby'])
+  await runAndExpectPass(page, 'answer = input("Secret word: ")\nwhile answer != "python":\n    print("Try again")\n    answer = input("Secret word: ")\nprint("Correct!")', ['ruby', 'python'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  await runStarterWithAnswers(page, ['5'])
+  await runUnchangedStarterAndExpectBlocked(page, ['5'])
+  await runAndExpectPass(page, 'start = int(input("Start? "))\nfor number in range(start, 0, -1):\n    print(number)\nprint("Launch!")', ['5'])
   await expect(page.getByRole('button', { name: /Repetition and Time Stage complete/ })).toContainText('10/10 ready')
   await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
   await page.getByRole('button', { name: 'Next stage' }).click()
@@ -760,8 +772,9 @@ test('Stage 7: algorithm patterns work across the full chapter and transfer to n
   await runAndExpectPass(page, 'scores = [4, 9, 2, 10, 7]\nhigh_scores = []\nfor score in scores:\n    if score >= 7:\n        high_scores.append(score)\nprint(high_scores)')
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
-  await setEditorCode(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)')
-  await runStarterWithAnswers(page, ['-1', '12'])
+  await runUnchangedStarterAndExpectBlocked(page, ['-1'])
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('0')
+  await runAndExpectPass(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)', ['-1', '12'])
   await page.getByRole('button', { name: 'Next lesson' }).click()
 
   const patternAnswers = [
@@ -1656,8 +1669,9 @@ test('validation retry remains usable at iPad landscape and portrait sizes @tabl
   await openLesson(page, 'stage-7-lesson-8', 'ask-again-when-age-is-negative')
   await expect(page.getByRole('heading', { name: 'Validate / repeat until acceptable' })).toBeVisible()
   await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
-  await setEditorCode(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)')
-  await runStarterWithAnswers(page, ['-1', '12'])
+  await runUnchangedStarterAndExpectBlocked(page, ['-1'])
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('0')
+  await runAndExpectPass(page, 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)', ['-1', '12'])
 
   const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
   const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
