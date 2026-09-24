@@ -22,6 +22,8 @@ import { ActivityHints } from './activity-hints'
 import { CompactCode } from './compact-code'
 import { ExecutionOutput } from './execution-output'
 import { PlanningActivityView } from './planning-activity'
+import { FileWorkspaceActivityView } from './file-workspace-activity'
+import type { VirtualFileMap } from '../../../lib/virtual-files'
 
 export interface ActivityRendererProps {
   activity: LearningActivity
@@ -30,6 +32,8 @@ export interface ActivityRendererProps {
   onAssessResponse: (response: LearnerResponse) => void
   code: string
   onCodeChange: (code: string) => void
+  workspaceFiles?: VirtualFileMap
+  onWorkspaceFilesChange?: (files: VirtualFileMap) => void
   onResetCode: () => void
   onRun: () => void
   isRunning: boolean
@@ -44,10 +48,12 @@ export interface ActivityRendererProps {
 }
 
 export function ActivityRenderer(props: ActivityRendererProps) {
-  const { activity, onResetCode, ...shared } = props
+  const { activity, onResetCode, workspaceFiles, onWorkspaceFilesChange, ...shared } = props
   switch (activity.kind) {
     case 'code':
       return <CodeActivityView {...shared} activity={activity} onReset={onResetCode} />
+    case 'file-workspace':
+      return <FileWorkspaceActivityView {...shared} activity={activity} files={workspaceFiles ?? activity.starterFiles} onFilesChange={onWorkspaceFilesChange ?? (() => undefined)} onReset={onResetCode} />
     case 'predict-output':
       return <PredictOutputView {...shared} activity={activity} />
     case 'predict-state':

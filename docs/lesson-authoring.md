@@ -86,13 +86,13 @@ Hints are ordered from a smaller nudge to a more explicit clue. Reveal one at a 
 
 ## Progress and compatibility
 
-`src/features/progress/progress-store.ts` is the only localStorage boundary. Version 2 stores:
+`src/features/progress/progress-store.ts` is the only localStorage boundary. Version 3 stores:
 
 - current lesson and step ID;
 - completed required activity IDs;
-- per-activity code, response, and revealed-hint count.
+- per-activity code, response, revealed-hint count, and—only for file-workspace activities—the learner's safe virtual project files.
 
-Do not save runtime instances, stdout, or interactive input answers. If changing the progress schema, normalize unknown/corrupt values and add a migration test. V1 lesson completion and saved code currently migrate to the corresponding v2 activities.
+Do not save runtime instances, stdout, or interactive input answers. If changing the progress schema, normalize unknown/corrupt values and add a migration test. V1 lesson completion and saved code normalize into activity-based progress; v2 activity progress normalizes into v3 while retaining only valid virtual files for workspace activities. The Pyodide filesystem itself is never the persistence authority: each run starts from the saved file snapshot and returns its updated snapshot.
 
 An activity may only be marked complete when it is required and its assessment passes. Lesson completion, stage progress, unlocks, and previous/next targets derive from the curriculum's required activities. The session restores only an available and unlocked current lesson; future/removed data is filtered safely.
 

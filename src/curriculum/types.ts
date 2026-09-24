@@ -1,3 +1,5 @@
+import type { VirtualFileMap } from '../lib/virtual-files'
+
 export type LessonStatus = 'ready' | 'coming-soon'
 
 export type ContentBlock =
@@ -20,11 +22,21 @@ export type OutputExpectation =
   | { mode: 'contains'; values: string[] }
   | { mode: 'line-count'; count: number }
   | { mode: 'distinct-lines'; count: number }
+  | { mode: 'integer-range'; minimum: number; maximum: number }
   | { mode: 'non-empty' }
+
+export interface WorkspaceFileExpectation {
+  path: string
+  mode: 'exact' | 'contains'
+  value: string
+}
 
 export interface BehaviorTestCase {
   inputs: string[]
   output?: OutputExpectation
+  randomSeed?: number
+  workspaceSeed?: VirtualFileMap
+  workspaceExpectations?: WorkspaceFileExpectation[]
   requiredInputs?: Array<{
     inputIndex: number
     minimumOccurrences?: number
@@ -78,11 +90,24 @@ export type AstRequirement =
   | 'record-total'
   | 'multiple-assertions'
   | 'reused-function'
+  | 'random-integer'
+  | 'file-read'
+  | 'file-write'
+  | 'json-load'
+  | 'json-dump'
+  | 'file-not-found-handler'
+  | 'local-module-import'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
   | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
-  | { kind: 'behavior'; cases: BehaviorTestCase[]; requirements?: AstRequirement[] }
+  | {
+      kind: 'behavior'
+      cases: BehaviorTestCase[]
+      requirements?: AstRequirement[]
+      fileRequirements?: Array<{ path: string; requirements: AstRequirement[] }>
+    }
+  | { kind: 'successful-run'; requireOutput?: boolean }
   | { kind: 'timeout' }
   | { kind: 'runtime-error'; exceptionName: string; requirements?: AstRequirement[] }
   | { kind: 'ast'; requirement: AstRequirement; rejectOutput?: string[] }
@@ -93,6 +118,15 @@ export interface CodeActivity extends ActivityBase {
   sampleInputs?: string[]
   assessment: CodeAssessment
   executionMode?: 'normal' | 'trace'
+}
+
+/** A small text-file project, run from one named entry file in a fresh virtual workspace. */
+export interface FileWorkspaceActivity extends ActivityBase {
+  kind: 'file-workspace'
+  entryFile: string
+  starterFiles: VirtualFileMap
+  sampleInputs?: string[]
+  assessment: CodeAssessment
 }
 
 export interface PredictOutputActivity extends ActivityBase {
@@ -188,6 +222,7 @@ export interface PlanningActivity extends ActivityBase {
 
 export type LearningActivity =
   | CodeActivity
+  | FileWorkspaceActivity
   | PredictOutputActivity
   | PredictStateActivity
   | ChoiceActivity
@@ -243,6 +278,7 @@ export type LearnerResponse = string | string[] | Record<string, string>
 
 export interface ActivityProgress {
   code?: string
+  files?: VirtualFileMap
   response?: LearnerResponse
   hintsRevealed?: number
 }

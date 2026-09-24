@@ -1,5 +1,4 @@
 import type { Curriculum, LearningActivity, Lesson, LessonStep, Stage } from './types'
-import { futureStages } from './stages/future-stages'
 import { stageZero } from './stages/stage-0'
 import { stageOne } from './stages/stage-1'
 import { stageTwo } from './stages/stage-2'
@@ -11,10 +10,12 @@ import { stageSeven } from './stages/stage-7'
 import { stageEight } from './stages/stage-8'
 import { stageNine } from './stages/stage-9'
 import { stageTen } from './stages/stage-10'
+import { stageEleven } from './stages/stage-11'
+import { isSafeVirtualFilePath, normalizeVirtualFiles } from '../lib/virtual-files'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, stageFive, stageSix, stageSeven, stageEight, stageNine, stageTen, ...futureStages],
+  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, stageFive, stageSix, stageSeven, stageEight, stageNine, stageTen, stageEleven],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {
@@ -220,6 +221,50 @@ export function validateCurriculum(curriculumData: Curriculum): string[] {
           }
           if (activity.fields.some((field) => field.rows !== undefined && (!Number.isInteger(field.rows) || field.rows < 1))) {
             issues.push(`Planning activity ${activity.id} field rows must be positive integers.`)
+          }
+        }
+        if (activity.kind === 'file-workspace') {
+          const paths = Object.keys(activity.starterFiles)
+          if (paths.length === 0 || !paths.includes(activity.entryFile)) {
+            issues.push(`File workspace ${activity.id} needs its entry file in the starter files.`)
+          }
+          if (!activity.entryFile.endsWith('.py') || !isSafeVirtualFilePath(activity.entryFile)) {
+            issues.push(`File workspace ${activity.id} needs a safe Python entry-file path.`)
+          }
+          if (paths.some((path) => !isSafeVirtualFilePath(path))) {
+            issues.push(`File workspace ${activity.id} contains an unsafe starter-file path.`)
+          }
+          if (paths.length > 40 || Object.values(activity.starterFiles).some((content) => typeof content !== 'string')) {
+            issues.push(`File workspace ${activity.id} has an invalid number or type of starter files.`)
+          }
+          if (Object.keys(normalizeVirtualFiles(activity.starterFiles)).length !== paths.length) {
+            issues.push(`File workspace ${activity.id} starter files exceed the safe workspace limits.`)
+          }
+        }
+        if ('assessment' in activity && activity.assessment.kind === 'behavior') {
+          if (activity.assessment.cases.some((testCase) => testCase.randomSeed !== undefined && !Number.isSafeInteger(testCase.randomSeed))) {
+            issues.push(`Behavior assessment ${activity.id} random seeds must be safe integers.`)
+          }
+          for (const testCase of activity.assessment.cases) {
+            if (testCase.workspaceSeed && activity.kind !== 'file-workspace') {
+              issues.push(`Behavior assessment ${activity.id} can seed workspace files only for a file-workspace activity.`)
+            }
+            if (testCase.workspaceSeed && Object.keys(normalizeVirtualFiles(testCase.workspaceSeed)).length !== Object.keys(testCase.workspaceSeed).length) {
+              issues.push(`Behavior assessment ${activity.id} has unsafe or oversized workspace seed files.`)
+            }
+            if (testCase.workspaceExpectations?.some((expectation) => !isSafeVirtualFilePath(expectation.path))) {
+              issues.push(`Behavior assessment ${activity.id} has an unsafe workspace file expectation path.`)
+            }
+          }
+          if (activity.assessment.fileRequirements) {
+            if (activity.kind !== 'file-workspace') {
+              issues.push(`Behavior assessment ${activity.id} can inspect project files only for a file-workspace activity.`)
+            }
+            if (activity.assessment.fileRequirements.some(({ path, requirements }) =>
+              !isSafeVirtualFilePath(path) || !path.endsWith('.py') || requirements.length === 0,
+            )) {
+              issues.push(`Behavior assessment ${activity.id} file requirements need safe Python paths and at least one requirement.`)
+            }
           }
         }
       }

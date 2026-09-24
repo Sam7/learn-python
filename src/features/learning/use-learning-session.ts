@@ -16,6 +16,7 @@ import { assessActivity } from '../lessons/validators/activity-validator'
 import { createProgressRepository, type LearnerProgress } from '../progress/progress-store'
 import { usePythonRunner } from '../python/python-runner/use-python-runner'
 import type { PythonInputRequest, PythonRunRequest, PythonRunResult } from '../python/python-runner/types'
+import { normalizeVirtualFiles, type VirtualFileMap } from '../../lib/virtual-files'
 import { canOpenLesson, getAdvanceTarget, getPreviousStep, getStepProgress } from './domain/progression'
 
 interface PendingInput {
@@ -48,6 +49,9 @@ export function useLearningSession() {
   const activity = activeStep?.activity
   const activityState = activity ? progress.activityProgress[activity.id] : undefined
   const code = activity?.kind === 'code' ? activityState?.code ?? activity.starterCode : ''
+  const workspaceFiles = activity?.kind === 'file-workspace'
+    ? normalizeVirtualFiles({ ...activity.starterFiles, ...activityState?.files })
+    : {}
   const defaultInputs = activity && 'sampleInputs' in activity ? activity.sampleInputs ?? [] : []
   const transcriptValue = activity ? transcriptByActivity[activity.id] ?? defaultInputs.join('\n') : ''
   const execution = activity ? executionByActivity[activity.id] ?? null : null
@@ -114,6 +118,12 @@ export function useLearningSession() {
     setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
   }
 
+  const handleWorkspaceFilesChange = (files: VirtualFileMap) => {
+    if (!activity || activity.kind !== 'file-workspace') return
+    setActivityState(activity.id, (current) => ({ ...current, files: normalizeVirtualFiles(files) }))
+    setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
+  }
+
   const handleResponseChange = (value: LearnerResponse) => {
     if (!activity) return
     setActivityState(activity.id, (current) => ({ ...current, response: value }))
@@ -170,7 +180,12 @@ export function useLearningSession() {
     if (runtimeStatus !== 'ready') return
 
     const currentActivity = activity
-    const source = currentActivity.kind === 'code' ? code : currentActivity.code
+    const isWorkspace = currentActivity.kind === 'file-workspace'
+    const source = currentActivity.kind === 'code'
+      ? code
+      : isWorkspace
+        ? workspaceFiles[currentActivity.entryFile] ?? ''
+        : currentActivity.code
     const shouldTrace = currentActivity.kind === 'trace'
       || currentActivity.kind === 'trace-table'
       || currentActivity.kind === 'branch-trace'
@@ -179,6 +194,7 @@ export function useLearningSession() {
     const inputs = transcriptValue.length ? transcriptValue.split('\n') : []
     const request: PythonRunRequest = {
       code: source,
+      ...(isWorkspace ? { workspace: { entryFile: currentActivity.entryFile, files: workspaceFiles } } : {}),
       input: interactiveInput ? { mode: 'interactive' } : { mode: 'transcript', lines: inputs },
       trace: shouldTrace,
     }
@@ -194,6 +210,9 @@ export function useLearningSession() {
     if (operationId.current !== runToken) return
 
     setExecutionByActivity((current) => ({ ...current, [currentActivity.id]: result }))
+    if (isWorkspace && result.workspaceFiles) {
+      setActivityState(currentActivity.id, (current) => ({ ...current, files: result.workspaceFiles }))
+    }
     pendingInputRef.current = null
     setPendingInput(null)
     setRunningActivityId(null)
@@ -203,7 +222,8 @@ export function useLearningSession() {
     const response = progressRef.current.activityProgress[currentActivity.id]?.response
     const resultOfAssessment = await assessActivity(currentActivity, {
       response,
-      code: currentActivity.kind === 'code' ? source : undefined,
+      code: currentActivity.kind === 'code' || isWorkspace ? source : undefined,
+      workspaceFiles: isWorkspace ? workspaceFiles : undefined,
       execution: result,
       runPython,
     })
@@ -224,12 +244,10 @@ export function useLearningSession() {
   }
 
   const resetCode = () => {
-    if (!activity || activity.kind !== 'code') return
-    setActivityState(activity.id, (current) => ({
-      ...current,
-      code: activity.starterCode,
-      hintsRevealed: 0,
-    }))
+    if (!activity || (activity.kind !== 'code' && activity.kind !== 'file-workspace')) return
+    setActivityState(activity.id, (current) => activity.kind === 'code'
+      ? { ...current, code: activity.starterCode, hintsRevealed: 0 }
+      : { ...current, files: normalizeVirtualFiles(activity.starterFiles), hintsRevealed: 0 })
     setExecutionByActivity((current) => ({ ...current, [activity.id]: null }))
     setFeedbackByActivity((current) => ({ ...current, [activity.id]: null }))
   }
@@ -323,6 +341,7 @@ export function useLearningSession() {
     activityProgress: activityState,
     response: activityState?.response,
     code,
+    workspaceFiles,
     transcriptValue,
     inputInteraction: {
       interactive: interactiveInput,
@@ -357,6 +376,7 @@ export function useLearningSession() {
     goPrevious,
     selectLesson,
     changeCode: handleCodeChange,
+    changeWorkspaceFiles: handleWorkspaceFilesChange,
     changeResponse: handleResponseChange,
     assessResponse,
     runActivity,

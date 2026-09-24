@@ -3,22 +3,28 @@ import type {
   AstRequirement,
   BranchTraceActivity,
   CodeActivity,
+  FileWorkspaceActivity,
   LearningActivity,
   LearnerResponse,
   OutputExpectation,
   PredictStateActivity,
   TraceTableActivity,
   ValidationResult,
+  BehaviorTestCase,
+  WorkspaceFileExpectation,
 } from '../../../curriculum/types'
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
+import type { VirtualFileMap } from '../../../lib/virtual-files'
 import { resolveBranchPath } from '../../learning/domain/branch-trace'
 import { buildDebuggingAstCheck, getDebuggingAstMessage } from './debugging-ast'
 import { validatePlanningActivity } from './planning-validator'
 import { buildStructuredDataAstCheck, getStructuredDataAstMessage } from './structured-data-ast'
+import { buildRealWorldAstCheck, getRealWorldAstMessage } from './real-world-ast'
 
 export interface ActivityAssessmentContext {
   response?: LearnerResponse
   code?: string
+  workspaceFiles?: VirtualFileMap
   execution: PythonRunResult
   runPython: (request: PythonRunRequest) => Promise<PythonRunResult>
 }
@@ -44,6 +50,10 @@ function expectationMatches(expectation: OutputExpectation, stdout: string): boo
   const output = normalizedOutput(stdout)
   if (expectation.mode === 'exact') return output === expectation.lines.join('\n')
   if (expectation.mode === 'contains') return expectation.values.every((value) => output.includes(value))
+  if (expectation.mode === 'integer-range') {
+    const value = Number(output)
+    return Number.isInteger(value) && value >= expectation.minimum && value <= expectation.maximum
+  }
   const lines = outputLines(stdout)
   if (expectation.mode === 'line-count') return lines.length === expectation.count
   if (expectation.mode === 'distinct-lines') {
@@ -64,6 +74,7 @@ function expectationDescription(expectation: OutputExpectation): string {
   if (expectation.mode === 'contains') return `Output includes: ${expectation.values.join(', ')}`
   if (expectation.mode === 'line-count') return `${expectation.count} output line${expectation.count === 1 ? '' : 's'}`
   if (expectation.mode === 'distinct-lines') return `${expectation.count} different non-empty output lines`
+  if (expectation.mode === 'integer-range') return `A whole number from ${expectation.minimum} to ${expectation.maximum}`
   return 'some non-empty output'
 }
 
@@ -76,7 +87,68 @@ function failedExecution(result: PythonRunResult): ValidationResult {
   }
 }
 
-function validateOutputActivity(activity: CodeActivity, stdout: string): ValidationResult {
+type ExecutableActivity = CodeActivity | FileWorkspaceActivity
+
+function starterSource(activity: ExecutableActivity): string {
+  return activity.kind === 'code' ? activity.starterCode : activity.starterFiles[activity.entryFile] ?? ''
+}
+
+function codeRequest(
+  activity: ExecutableActivity,
+  context: ActivityAssessmentContext,
+  code: string,
+  input?: PythonRunRequest['input'],
+  testCase?: BehaviorTestCase,
+): PythonRunRequest {
+  const pythonSourceFiles = activity.kind === 'file-workspace'
+    ? Object.fromEntries(Object.entries(context.workspaceFiles ?? {}).filter(([path]) => path.endsWith('.py')))
+    : {}
+  const caseCode = testCase?.randomSeed === undefined
+    ? code
+    : `import random\nrandom.seed(${testCase.randomSeed})\n${code}`
+  return {
+    code: caseCode,
+    ...(input ? { input } : {}),
+    ...(activity.kind === 'file-workspace'
+      ? {
+          workspace: {
+            entryFile: activity.entryFile,
+            files: {
+              ...activity.starterFiles,
+              ...pythonSourceFiles,
+              ...testCase?.workspaceSeed,
+              [activity.entryFile]: caseCode,
+            },
+          },
+        }
+      : {}),
+  }
+}
+
+function workspaceFileExpectationFailure(
+  expectations: WorkspaceFileExpectation[] | undefined,
+  result: PythonRunResult,
+): ValidationResult | null {
+  for (const expectation of expectations ?? []) {
+    const actual = result.workspaceFiles?.[expectation.path]
+    const matches = actual !== undefined && (expectation.mode === 'exact'
+      ? actual === expectation.value
+      : actual.includes(expectation.value))
+    if (!matches) {
+      return {
+        passed: false,
+        message: `Python ran, but ${expectation.path} does not contain the saved information the task asks for yet.`,
+        evidence: {
+          expected: `${expectation.path} ${expectation.mode}: ${expectation.value}`,
+          actual: actual ?? '(file was not created)',
+        },
+      }
+    }
+  }
+  return null
+}
+
+function validateOutputActivity(activity: ExecutableActivity, stdout: string): ValidationResult {
   const assessment = activity.assessment
   if (assessment.kind !== 'output') return { passed: false, message: 'This code task needs a different assessment.' }
   const output = normalizedOutput(stdout)
@@ -89,10 +161,18 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
         passed: false,
         message: 'The result is not quite right yet. Compare your output with the task and try again.',
         evidence: { expected: expectationDescription(assessment.expectation), actual: output || '(no output)' },
-      }
+  }
 }
 
-function pythonAstCheck(source: string, requirement: AstRequirement): string {
+function localPythonModuleNames(files: VirtualFileMap | undefined): string[] {
+  return Object.keys(files ?? {})
+    .filter((path) => path.endsWith('.py'))
+    .map((path) => path.slice(path.lastIndexOf('/') + 1, -3))
+}
+
+function pythonAstCheck(source: string, requirement: AstRequirement, localModuleNames: string[] = []): string {
+  const realWorldCheck = buildRealWorldAstCheck(source, requirement, localModuleNames)
+  if (realWorldCheck) return realWorldCheck
   const debuggingCheck = buildDebuggingAstCheck(source, requirement)
   if (debuggingCheck) return debuggingCheck
   const structuredDataCheck = buildStructuredDataAstCheck(source, requirement)
@@ -685,6 +765,8 @@ ${conceptCheck}
 }
 
 function astAssessmentMessage(requirement: AstRequirement, passed: boolean): string {
+  const realWorldMessage = getRealWorldAstMessage(requirement, passed)
+  if (realWorldMessage) return realWorldMessage
   const debuggingMessage = getDebuggingAstMessage(requirement, passed)
   if (debuggingMessage) return debuggingMessage
   const structuredDataMessage = getStructuredDataAstMessage(requirement, passed)
@@ -773,11 +855,11 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
 }
 
 async function validateCodeActivity(
-  activity: CodeActivity,
+  activity: ExecutableActivity,
   context: ActivityAssessmentContext,
 ): Promise<ValidationResult> {
   const assessment = activity.assessment
-  const source = context.code ?? activity.starterCode
+  const source = context.code ?? starterSource(activity)
   if (assessment.kind === 'timeout') {
     if (context.execution.status === 'timeout') {
       return { passed: true, message: 'Good observation — Python stopped this run at the time limit.' }
@@ -792,7 +874,7 @@ async function validateCodeActivity(
     const expectedError = errorLines.some((line) => line.startsWith(`${assessment.exceptionName}:`))
     if (context.execution.status === 'error' && expectedError) {
       for (const requirement of assessment.requirements ?? []) {
-        const result = await context.runPython({ code: pythonAstCheck(source, requirement) })
+        const result = await context.runPython({ code: pythonAstCheck(source, requirement, localPythonModuleNames(context.workspaceFiles)) })
         if (result.status !== 'success') {
           return { passed: false, message: astAssessmentMessage(requirement, false) }
         }
@@ -816,6 +898,14 @@ async function validateCodeActivity(
     return failedExecution(context.execution)
   }
 
+  if (assessment.kind === 'successful-run') {
+    if (context.execution.status !== 'success') return failedExecution(context.execution)
+    if (assessment.requireOutput !== false && !context.execution.stdout.trim()) {
+      return { passed: false, message: 'Your project ran, but it did not show anything yet. Add an output so someone can see what it does.' }
+    }
+    return { passed: true, message: 'Your project ran and showed output. This confirms it runs, not that every idea is correct.' }
+  }
+
   if (context.execution.status !== 'success') return failedExecution(context.execution)
   if (assessment.kind === 'output') return validateOutputActivity(activity, context.execution.stdout)
 
@@ -831,7 +921,7 @@ async function validateCodeActivity(
     if (assessment.kind === 'ast' && assessment.rejectOutput?.some((rejected) => normalizedOutput(context.execution.stdout).includes(rejected))) {
       return { passed: false, message: 'Change the example value to something of your own.' }
     }
-    const result = await context.runPython({ code: pythonAstCheck(source, assessment.requirement) })
+    const result = await context.runPython({ code: pythonAstCheck(source, assessment.requirement, localPythonModuleNames(context.workspaceFiles)) })
     return {
       passed: result.status === 'success',
       message: astAssessmentMessage(assessment.requirement, result.status === 'success'),
@@ -839,10 +929,7 @@ async function validateCodeActivity(
   }
 
   for (const testCase of assessment.cases) {
-    const result = await context.runPython({
-      code: source,
-      input: { mode: 'transcript', lines: testCase.inputs },
-    })
+    const result = await context.runPython(codeRequest(activity, context, source, { mode: 'transcript', lines: testCase.inputs }, testCase))
     if (result.status !== 'success') {
       return { passed: false, message: 'Python could not test that yet. Make sure your input() calls have answers.' }
     }
@@ -872,12 +959,27 @@ async function validateCodeActivity(
           : undefined,
       }
     }
+    const fileFailure = workspaceFileExpectationFailure(testCase.workspaceExpectations, result)
+    if (fileFailure) return fileFailure
   }
 
   for (const requirement of assessment.requirements ?? []) {
-    const result = await context.runPython({ code: pythonAstCheck(source, requirement) })
+    const result = await context.runPython({ code: pythonAstCheck(source, requirement, localPythonModuleNames(context.workspaceFiles)) })
     if (result.status !== 'success') {
       return { passed: false, message: astAssessmentMessage(requirement, false) }
+    }
+  }
+
+  for (const fileRequirement of assessment.fileRequirements ?? []) {
+    const fileSource = context.workspaceFiles?.[fileRequirement.path]
+    if (fileSource === undefined) {
+      return { passed: false, message: `Add ${fileRequirement.path} to the project before checking its Python structure.` }
+    }
+    for (const requirement of fileRequirement.requirements) {
+      const result = await context.runPython({ code: pythonAstCheck(fileSource, requirement, localPythonModuleNames(context.workspaceFiles)) })
+      if (result.status !== 'success') {
+        return { passed: false, message: `${fileRequirement.path}: ${astAssessmentMessage(requirement, false)}` }
+      }
     }
   }
 
@@ -979,6 +1081,8 @@ export async function assessActivity(
 ): Promise<ValidationResult> {
   switch (activity.kind) {
     case 'code':
+      return validateCodeActivity(activity, context)
+    case 'file-workspace':
       return validateCodeActivity(activity, context)
     case 'predict-output': {
       if (context.execution.status !== 'success') return failedExecution(context.execution)

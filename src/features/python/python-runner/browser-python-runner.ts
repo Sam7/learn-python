@@ -101,6 +101,8 @@ export class BrowserPythonRunner implements PythonRunner {
         traceFrames: message.traceFrames,
         error: message.error,
         durationMs: message.durationMs,
+        workspaceFiles: message.workspaceFiles,
+        workspaceWarning: message.workspaceWarning,
       })
     }
 
@@ -209,7 +211,15 @@ export class BrowserPythonRunner implements PythonRunner {
       }
       this.pending.set(id, pending)
       this.scheduleTimeout(id, request.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-      worker.postMessage({ type: 'run', requestId: id, code: request.code, input, trace: request.trace ?? false })
+      worker.postMessage({
+        type: 'run',
+        requestId: id,
+        ...(request.workspace
+          ? { mode: 'workspace', workspace: { ...request.workspace, files: { ...request.workspace.files, [request.workspace.entryFile]: request.code } } }
+          : { mode: 'code', code: request.code }),
+        input,
+        trace: request.trace ?? false,
+      })
     })
   }
 

@@ -8,6 +8,8 @@ interface CodeEditorProps {
   value: string
   onChange: (value: string) => void
   readOnly?: boolean
+  language?: 'python' | 'plain'
+  ariaLabel?: string
 }
 
 const editorTheme = EditorView.theme({
@@ -78,14 +80,14 @@ const syntaxTheme = syntaxHighlighting(HighlightStyle.define([
   { tag: tags.meta, color: '#ffd166' },
 ]))
 
-export function CodeEditor({ value, onChange, readOnly = false }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, readOnly = false, language = 'python', ariaLabel = 'Python code editor' }: CodeEditorProps) {
   return (
     <div className="overflow-x-auto rounded-xl bg-ink shadow-inner" data-testid="code-editor">
       <CodeMirror
         value={value}
         height="auto"
         minHeight="142px"
-        extensions={[python(), EditorView.lineWrapping, editorTheme, syntaxTheme]}
+        extensions={[...(language === 'python' ? [python()] : []), EditorView.lineWrapping, editorTheme, syntaxTheme]}
         onChange={onChange}
         readOnly={readOnly}
         basicSetup={{
@@ -98,7 +100,7 @@ export function CodeEditor({ value, onChange, readOnly = false }: CodeEditorProp
           autocompletion: false,
           indentOnInput: true,
         }}
-        aria-label="Python code editor"
+        aria-label={ariaLabel}
       />
     </div>
   )

@@ -80,6 +80,8 @@ function App() {
                   onAssessResponse={session.assessResponse}
                   code={session.code}
                   onCodeChange={session.changeCode}
+                  workspaceFiles={session.workspaceFiles}
+                  onWorkspaceFilesChange={session.changeWorkspaceFiles}
                   onResetCode={session.resetCode}
                   onRun={session.runActivity}
                   isRunning={session.isRunning}

@@ -1,4 +1,5 @@
-import type { PythonInputMode, PythonInputTranscriptEntry, PythonTraceFrame } from './types'
+import type { PythonInputMode, PythonInputTranscriptEntry, PythonTraceFrame, PythonWorkspace } from './types'
+import type { VirtualFileMap } from '../../../lib/virtual-files'
 
 export type WorkerInput = {
   mode: PythonInputMode
@@ -6,8 +7,10 @@ export type WorkerInput = {
   channel?: SharedArrayBuffer
 }
 
+type WorkerRunOptions = { type: 'run'; requestId: number; input: WorkerInput; trace: boolean }
+
 export type WorkerRequest =
-  | { type: 'run'; requestId: number; code: string; input: WorkerInput; trace: boolean }
+  | (WorkerRunOptions & ({ mode: 'code'; code: string } | { mode: 'workspace'; workspace: PythonWorkspace }))
   | { type: 'reset'; requestId: number }
 
 export type WorkerResponse =
@@ -22,6 +25,8 @@ export type WorkerResponse =
       stderr: string
       inputTranscript: PythonInputTranscriptEntry[]
       traceFrames?: PythonTraceFrame[]
+      workspaceFiles?: VirtualFileMap
+      workspaceWarning?: string
       error?: string
       durationMs: number
     }

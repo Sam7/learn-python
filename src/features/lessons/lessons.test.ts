@@ -13,8 +13,8 @@ import {
   readyLessons,
   validateCurriculum,
 } from '../../curriculum/curriculum'
-import type { AstRequirement, CodeActivity, LearningActivity, PlanningActivity } from '../../curriculum/types'
-import type { PythonRunResult } from '../python/python-runner/types'
+import type { AstRequirement, CodeActivity, LearningActivity, PlanningActivity, FileWorkspaceActivity } from '../../curriculum/types'
+import type { PythonRunRequest, PythonRunResult } from '../python/python-runner/types'
 import { getAdvanceTarget, getStepProgress } from '../learning/domain/progression'
 import { assessActivity } from './validators/activity-validator'
 
@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first eleven stages and leaves the final stage unavailable', () => {
+  it('publishes all twelve authored stages and unlocks Stage 11 after Stage 10', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -151,9 +151,17 @@ describe('the canonical curriculum outline', () => {
       'Recognise existing algorithm patterns',
       'Build from acceptance examples',
       'First mostly-independent project',
+      'Libraries are reusable capabilities',
+      'Randomness project',
+      'Programs can persist information',
+      'Structured persistent data',
+      'Expected failures',
+      'Modules organise larger programs',
+      'Guided final project',
+      'Independent capstone',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(8)
-    expect(readyLessons).toHaveLength(101)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(0)
+    expect(readyLessons).toHaveLength(109)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -177,7 +185,8 @@ describe('the canonical curriculum outline', () => {
     expect(getNextCurriculumLesson('stage-9-lesson-10')?.title).toBe('Understand through examples')
     expect(getNextLesson('stage-9-lesson-10')?.title).toBe('Understand through examples')
     expect(getNextCurriculumLesson('stage-10-lesson-10')?.title).toBe('Libraries are reusable capabilities')
-    expect(getNextLesson('stage-10-lesson-10')).toBeUndefined()
+    expect(getNextLesson('stage-10-lesson-10')?.title).toBe('Libraries are reusable capabilities')
+    expect(getNextLesson('stage-11-lesson-8')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -258,6 +267,133 @@ describe('the canonical curriculum outline', () => {
     expect(getAdvanceTarget(lesson, predictionStep.id, [predictionId])).toEqual({ kind: 'step', step: arrangeStep })
     expect(getStepProgress(lesson, arrangeStep.id, [predictionId]).canAdvance).toBe(false)
     expect(getAdvanceTarget(lesson, arrangeStep.id, [predictionId, arrangeId]).kind).toBe('lesson')
+  })
+})
+
+describe('file-workspace curriculum definitions', () => {
+  it('accepts a safe entry file among bounded relative starter files', () => {
+    const workspaceActivity: LearningActivity = {
+      id: 'workspace-activity',
+      kind: 'file-workspace',
+      title: 'Use two files',
+      prompt: 'Edit the project.',
+      required: true,
+      entryFile: 'main.py',
+      starterFiles: { 'main.py': 'import scores', 'scores.py': 'def score():\n    return 4' },
+      assessment: { kind: 'behavior', cases: [{ inputs: [], output: { mode: 'exact', lines: ['4'] } }] },
+    }
+    const definition = {
+      title: 'Test',
+      stages: [{
+        id: 'workspace-stage', order: 0, title: 'Workspace', description: 'Test workspace paths.',
+        lessons: [{
+          id: 'workspace-lesson', order: 1, title: 'Workspace', shortTitle: 'Workspace', summary: 'Workspace test.',
+          status: 'ready' as const,
+          steps: [{ id: 'workspace-step', content: [], activity: workspaceActivity }],
+        }],
+      }],
+    }
+    expect(validateCurriculum(definition)).toEqual([])
+    expect(validateCurriculum({
+      ...definition,
+      stages: [{ ...definition.stages[0], lessons: [{
+        ...definition.stages[0].lessons[0],
+        steps: [{ id: 'workspace-step', content: [], activity: { ...workspaceActivity, entryFile: '../main.py' } }],
+      }] }],
+    })).toContain('File workspace workspace-activity needs a safe Python entry-file path.')
+  })
+
+  it('validates behavior against a clean file fixture and checks saved files as well as output', async () => {
+    const activity: FileWorkspaceActivity = {
+      id: 'save-score',
+      kind: 'file-workspace',
+      title: 'Save a score',
+      prompt: 'Write a score to a file.',
+      required: true,
+      entryFile: 'main.py',
+      starterFiles: { 'main.py': 'print("ready")', 'score.txt': '0' },
+      assessment: {
+        kind: 'behavior',
+        cases: [{
+          inputs: [],
+          output: { mode: 'exact', lines: ['Saved'] },
+          workspaceSeed: { 'score.txt': '0' },
+          workspaceExpectations: [{ path: 'score.txt', mode: 'exact', value: '9' }],
+        }],
+      },
+    }
+    const requests: PythonRunRequest[] = []
+    const result = await assessActivity(activity, {
+      code: 'print("Saved")',
+      workspaceFiles: { 'main.py': 'print("Saved")', 'score.txt': 'stale', 'scores.py': 'def total():\n    return 9' },
+      execution: { ...success('Saved\n'), workspaceFiles: { 'main.py': 'print("Saved")', 'score.txt': '9' } },
+      runPython: async (request) => {
+        requests.push(request)
+        return { ...success('Saved\n'), workspaceFiles: { 'main.py': 'print("Saved")', 'score.txt': '9' } }
+      },
+    })
+
+    expect(result.passed).toBe(true)
+    expect(requests[0].workspace?.files).toMatchObject({ 'score.txt': '0', 'scores.py': expect.any(String) })
+    expect(requests[0].workspace?.files['main.py']).toBe('print("Saved")')
+  })
+
+  it('does not pass a file-writing task when expected project data was not saved', async () => {
+    const activity: FileWorkspaceActivity = {
+      id: 'missing-saved-score',
+      kind: 'file-workspace',
+      title: 'Save a score',
+      prompt: 'Write a score to a file.',
+      required: true,
+      entryFile: 'main.py',
+      starterFiles: { 'main.py': '' },
+      assessment: {
+        kind: 'behavior',
+        cases: [{
+          inputs: [],
+          output: { mode: 'exact', lines: ['Saved'] },
+          workspaceExpectations: [{ path: 'score.txt', mode: 'exact', value: '9' }],
+        }],
+      },
+    }
+    const result = await assessActivity(activity, {
+      code: 'print("Saved")',
+      workspaceFiles: { 'main.py': 'print("Saved")' },
+      execution: success('Saved\n'),
+      runPython: async () => success('Saved\n'),
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.message).toContain('score.txt')
+    expect(result.evidence?.actual).toBe('(file was not created)')
+  })
+
+  it('seeds repeatable random behavior tests and checks integer output ranges', async () => {
+    const activity: CodeActivity = {
+      id: 'random-range',
+      kind: 'code',
+      title: 'Choose a number',
+      prompt: 'Choose an integer.',
+      required: true,
+      starterCode: 'print(4)',
+      assessment: {
+        kind: 'behavior',
+        cases: [{ inputs: [], randomSeed: 23, output: { mode: 'integer-range', minimum: 1, maximum: 10 } }],
+      },
+    }
+    let testedCode = ''
+    const result = await assessActivity(activity, {
+      code: 'import random\nprint(random.randint(1, 10))',
+      execution: success('6\n'),
+      runPython: async (request) => {
+        testedCode = request.code
+        return success('6\n')
+      },
+    })
+
+    expect(result.passed).toBe(true)
+    expect(testedCode).toContain('random.seed(23)')
+    expect(testedCode).toContain('random.randint(1, 10)')
   })
 })
 

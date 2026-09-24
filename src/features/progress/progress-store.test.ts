@@ -78,6 +78,35 @@ describe('progress persistence', () => {
     expect(progress.activityProgress['unknown-activity']).toBeUndefined()
   })
 
+  it('migrates version 2 progress and keeps only safe files for a workspace activity', () => {
+    const activity = {
+      id: 'saved-workspace',
+      kind: 'file-workspace' as const,
+      title: 'Project files',
+      prompt: 'Edit the files.',
+      required: true,
+      entryFile: 'main.py',
+      starterFiles: { 'main.py': '' },
+      assessment: { kind: 'successful-run' as const },
+    }
+    const lesson = {
+      id: 'workspace-lesson', order: 1, title: 'Workspace', shortTitle: 'Workspace', summary: 'Workspace test.',
+      status: 'ready' as const,
+      steps: [{ id: 'workspace-step', content: [], activity }],
+    }
+    const migrated = normalizeProgress({
+      version: 2,
+      currentLessonId: lesson.id,
+      completedActivityIds: [],
+      activityProgress: {
+        [activity.id]: { files: { 'main.py': 'print("saved")', 'score.txt': '12', '../outside.py': 'hidden' } },
+      },
+    }, [lesson])
+
+    expect(migrated.version).toBe(PROGRESS_VERSION)
+    expect(migrated.activityProgress[activity.id]?.files).toEqual({ 'main.py': 'print("saved")', 'score.txt': '12' })
+  })
+
   it('restores learner-entered trace-table cells as activity responses', () => {
     const activity = getLessonById('stage-2-lesson-6')!.steps[0].activity!
     const response = { 'after-coins-start:coins': '5', 'after-coins-start:stars': '—' }
@@ -110,13 +139,15 @@ describe('progress persistence', () => {
   })
 
   it('does not restore a coming-soon lesson as the active lesson', () => {
-    const future = allLessons.find((lesson) => lesson.status === 'coming-soon')!
+    const lastStageLesson = allLessons.find((lesson) => lesson.id === 'stage-11-lesson-8')!
+    const future = { ...lastStageLesson, status: 'coming-soon' as const }
+    const lessons = allLessons.map((lesson) => lesson.id === future.id ? future : lesson)
     const progress = normalizeProgress({
       version: PROGRESS_VERSION,
       currentLessonId: future.id,
       completedActivityIds: ['not-a-ready-activity'],
       activityProgress: {},
-    }, allLessons)
+    }, lessons)
 
     expect(progress.currentLessonId).toBe(readyLessons[0].id)
     expect(progress.completedActivityIds).toEqual([])

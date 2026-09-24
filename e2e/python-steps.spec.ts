@@ -806,6 +806,41 @@ async function runUnchangedStarterAndExpectBlocked(page: Page, answers: string[]
   await expect(page.getByRole('button', { name: /Next (step|lesson|stage)/ })).toBeDisabled()
 }
 
+async function selectWorkspaceFile(page: Page, path: string) {
+  const label = path === 'main.py' ? 'Open main.py, run entry file' : `Open ${path}`
+  const tab = page.getByRole('button', { name: label, exact: true })
+  if (await tab.getAttribute('aria-pressed') !== 'true') await tab.click()
+}
+
+async function setWorkspaceCode(page: Page, path: string, code: string) {
+  await selectWorkspaceFile(page, path)
+  const editor = page.locator('.cm-content')
+  await editor.fill(code)
+  await expect(editor).toContainText(code.split('\n')[0])
+}
+
+async function runUnchangedWorkspaceStarterAndExpectBlocked(page: Page, answers: string[] = []) {
+  const runButton = page.getByRole('button', { name: 'Run project' })
+  await expect(runButton).toBeEnabled({ timeout: 60_000 })
+  await runButton.click()
+  for (let index = 0; index < answers.length; index += 1) {
+    await answerLivePrompt(page, answers[index], index + 1)
+  }
+  await expect(runButton).toBeEnabled({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: /Next (step|lesson|stage)/ })).toBeDisabled()
+}
+
+async function runWorkspaceAndExpectPass(page: Page, path: string, code: string, answers: string[] = []) {
+  await setWorkspaceCode(page, path, code)
+  const runButton = page.getByRole('button', { name: 'Run project' })
+  await expect(runButton).toBeEnabled({ timeout: 60_000 })
+  await runButton.click()
+  for (let index = 0; index < answers.length; index += 1) {
+    await answerLivePrompt(page, answers[index], index + 1)
+  }
+  await expect(page.getByRole('status')).toContainText('Great work', { timeout: 30_000 })
+}
+
 test('Stage 8: records and representations work through the full leaderboard project', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
   test.setTimeout(300_000)
@@ -1086,10 +1121,179 @@ test('Stage 10: plan first, test working slices, and build from acceptance examp
   await page.locator('.cm-content').scrollIntoViewIfNeeded()
   await capture(page, testInfo, 'stage-10-treasure-explorer-desktop', false)
   await expect(page.getByRole('button', { name: /Designing Programs Stage complete/ })).toContainText('10/10 ready')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Libraries are reusable capabilities' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'First mostly-independent project' })).toBeVisible()
-  await expect(page.locator('.cm-content')).toContainText('elif choice == "river"')
+  await expect(page.getByRole('heading', { name: 'Libraries are reusable capabilities' })).toBeVisible()
+})
+
+test('Stage 11: connect libraries, files, JSON, and modules in a complete project journey', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(480_000)
+  await openLesson(page, 'stage-11-lesson-1', 'choose-a-library-tool')
+  await expect(page.getByRole('heading', { name: 'Libraries are reusable capabilities' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'number = 7' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: 'number = random.randint(1, 10)' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'import random\nnumber = random.randint(1, 10)\nprint(number)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'The player can no longer enter a guess.' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: 'The secret number can change.' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedStarterAndExpectBlocked(page, ['7'])
+  await runAndExpectPass(page,
+    'import random\nsecret = random.randint(1, 10)\nguess = int(input("Guess from 1 to 10: "))\nif guess == secret:\n    print("Correct")\nelif guess < secret:\n    print("Too low")\nelse:\n    print("Too high")',
+    ['7'],
+  )
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'A variable from the earlier run' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: 'A file in the project workspace' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  const scoreProgram = 'action = input("Save or show? ")\nif action == "save":\n    score = input("Score: ")\n    with open("score.txt", "w") as score_file:\n        score_file.write(score)\n    print(f"Saved {score}")\nelse:\n    with open("score.txt") as score_file:\n        score = score_file.read()\n    print(f"Saved score: {score}")'
+  await runWorkspaceAndExpectPass(page, 'main.py', scoreProgram, ['save', '58'])
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Saved 58')
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Programs can persist information' })).toBeVisible()
+  const scoreRun = page.getByRole('button', { name: 'Run project' })
+  await expect(scoreRun).toBeEnabled({ timeout: 60_000 })
+  await scoreRun.click()
+  await answerLivePrompt(page, 'show', 1)
+  await expect(scoreRun).toBeEnabled({ timeout: 20_000 })
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Saved score: 58')
+  await expect(page.getByRole('status')).toContainText('Great work')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: /^\[{"name": "Nova"/ }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  const jsonProgram = 'import json\nname = input("Player name: ")\nscore = int(input("Score: "))\nwith open("players.json") as player_file:\n    players = json.load(player_file)\nnew_player = {"name": name, "score": score}\nplayers.append(new_player)\nwith open("players.json", "w") as player_file:\n    json.dump(players, player_file)\nprint(f"Saved {len(players)} players")'
+  await runWorkspaceAndExpectPass(page, 'main.py', jsonProgram, ['Ari', '9'])
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Saved 3 players')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Python raises FileNotFoundError.' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  await runWorkspaceAndExpectPass(page, 'main.py', 'try:\n    with open("score.txt") as score_file:\n        score = score_file.read()\nexcept FileNotFoundError:\n    score = "No saved score yet"\nprint(score)')
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('No saved score yet')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  const mainModuleProgram = 'from scores import describe_score\nprint(describe_score(37))'
+  await setWorkspaceCode(page, 'main.py', mainModuleProgram)
+  await setWorkspaceCode(page, 'scores.py', 'def describe_score(score):\n    return f"Score: {score}"')
+  await runWorkspaceAndExpectPass(page, 'main.py', mainModuleProgram)
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Score: 37')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  for (const [label, value] of [
+    ['Requirements', 'Ask two questions, check both answers, and show the score.'],
+    ['Example behaviors', 'Answers 7 and Paris should give 2/2.'],
+    ['Data design', 'Each question goes with its correct answer.'],
+    ['Program jobs', 'Load, ask, check, count, and report.'],
+  ]) {
+    await page.getByRole('textbox', { name: new RegExp(label) }).fill(value)
+  }
+  await page.getByRole('button', { name: 'Save quiz plan' }).click()
+  await expect(page.getByRole('status')).toContainText('Plan saved')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page, ['7', 'Paris'])
+  const quizProgram = 'import json\nwith open("questions.json") as question_file:\n    questions = json.load(question_file)\nscore = 0\nfor question in questions:\n    answer = input(question["question"] + " ")\n    if answer.strip().lower() == question["answer"].lower():\n        print("Correct")\n        score = score + 1\n    else:\n        print("Try again")\nprint(f"Score: {score}/{len(questions)}")'
+  await runWorkspaceAndExpectPass(page, 'main.py', quizProgram, ['7', 'Paris'])
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Score: 2/2')
+  await page.locator('.cm-content').scrollIntoViewIfNeeded()
+  await capture(page, testInfo, 'stage-11-guided-quiz-desktop', false)
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  const projectPlan: Array<[string, string]> = [
+    ['What will it do?', 'It will greet a person who starts the program.'],
+    ['Who will use it?', 'A friend trying the project.'],
+    ['What information does it need?', 'A greeting and a name.'],
+    ['What information changes?', 'The name can change for each run.'],
+    ['How will you represent that information?', 'As text values.'],
+    ['What are the main jobs?', 'Ask for a name and display a greeting.'],
+    ['What functions might help?', 'A greeting function could format the message.'],
+    ['What is the smallest version', 'Print one greeting.'],
+    ['What examples will show it works?', 'Run the program and see its greeting.'],
+  ]
+  for (const [label, value] of projectPlan) {
+    await page.getByRole('textbox', { name: new RegExp(label) }).fill(value)
+  }
+  await page.getByRole('button', { name: 'Save project plan' }).click()
+  await expect(page.getByRole('status')).toContainText('Plan saved')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  await setWorkspaceCode(page, 'main.py', 'print("Hello from my project!")')
+  await page.getByRole('button', { name: 'Run project' }).click()
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('Hello from my project!')
+  await expect(page.getByRole('status')).toContainText('This confirms it runs, not that every idea is correct.')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  for (const [label, value] of [
+    ['How does your program work?', 'It starts by printing a greeting to the screen.'],
+    ['Why did you choose this representation?', 'The greeting is text, so a string is a clear fit.'],
+    ['What example did you test?', 'I ran it and saw Hello from my project.'],
+    ['What would you improve next?', 'I would ask for a name and personalise the greeting.'],
+  ]) {
+    await page.getByRole('textbox', { name: new RegExp(label) }).fill(value)
+  }
+  await page.getByRole('button', { name: 'Save explanation' }).click()
+  await expect(page.getByRole('status')).toContainText('Plan saved')
+  await expect(page.getByRole('button', { name: /Connecting Programming to the Real World Stage complete/ })).toContainText('8/8 ready')
+  await expect(page.getByRole('button', { name: 'Course complete' })).toBeDisabled()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Independent capstone' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: /How does your program work?/ })).toHaveValue('It starts by printing a greeting to the screen.')
+})
+
+test('Stage 11 project files stay usable through iPad rotation and refresh @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Stage 11 tablet coverage uses WebKit iPad projects.')
+  test.setTimeout(180_000)
+  await openLesson(page, 'stage-11-lesson-6', 'split-score-description')
+  await expect(page.getByRole('heading', { name: 'Modules organise larger programs' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+  await runUnchangedWorkspaceStarterAndExpectBlocked(page)
+  const mainProgram = 'from scores import describe_score\nprint(describe_score(37))'
+  await setWorkspaceCode(page, 'main.py', mainProgram)
+  await setWorkspaceCode(page, 'scores.py', 'def describe_score(score):\n    return f"Score: {score}"')
+  await runWorkspaceAndExpectPass(page, 'main.py', mainProgram)
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  const output = page.getByRole('region', { name: 'Python output' })
+  await output.scrollIntoViewIfNeeded()
+  await expect(output).toContainText('Score: 37')
+  await expect(page.getByRole('button', { name: 'Open scores.py', exact: true })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-11-modules`, false)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('heading', { name: 'Modules organise larger programs' })).toBeVisible()
+  await expect(output).toContainText('Score: 37')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-11-modules`, false)
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Modules organise larger programs' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('from scores import describe_score')
+  await expect(page.getByRole('button', { name: 'Open scores.py', exact: true })).toBeVisible()
 })
 
 test('Stage 10 planning fields remain usable and saved on iPad @tablet', async ({ page, browserName }, testInfo) => {

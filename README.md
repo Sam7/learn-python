@@ -22,7 +22,7 @@ npm run build            # TypeScript check and production build
 npm run test:e2e         # Playwright: Chromium + WebKit tablet projects
 ```
 
-The Playwright suite starts Vite automatically when needed. It covers the learner journey, multi-step lessons, immediate assessment, saved code/progress, real Python state tracing, live multiple inputs, syntax errors, timeout recovery, and WebKit iPad portrait/landscape layout. Representative viewport screenshots are written to `artifacts/screenshots/`.
+The Playwright suite starts Vite automatically when needed. It covers the learner journey, multi-step lessons, immediate assessment, saved code/progress, real Python state tracing, live multiple inputs, persistent multi-file workspace runs, syntax errors, timeout recovery, and WebKit iPad portrait/landscape layout. Representative viewport screenshots are written to `artifacts/screenshots/`.
 
 The automated WebKit checks cannot reproduce every physical iPad software-keyboard behaviour. Before a public launch, also test Safari on a real iPad: focus the editor, type with the keyboard open, dismiss the keyboard, run the code, and continue to the next lesson in both orientations.
 
@@ -41,11 +41,12 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 ## Project shape
 
-- `src/curriculum/` contains the typed Stage 0–11 curriculum outline from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons. Stages 0–10 (101 lessons) are fully available; Stage 11 remains structured as `coming-soon` data until authored and tested.
+- `src/curriculum/` contains the typed Stage 0–11 curriculum from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons, all available. Stage 11 teaches library use, randomness, persistent text and JSON files, expected failures, local modules, and guided and independent projects.
 - `src/features/learning/` renders generic activity types and owns the learner session/progression workflow. Lesson-specific rules stay in curriculum data and validation strategies.
+- `src/features/workspace/` defines the bounded virtual-file workspace shared by file-based activities. Each run receives a file snapshot and returns changed files, so saved work does not depend on a warm Pyodide runtime.
 - `src/features/lessons/validators/` contains output, behavior, and Python-AST-backed code assessment.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.
-- `src/features/progress/` contains the versioned persistence boundary and v1-to-v2 migration. Progress v2 stores the current step, completed activity IDs, and saved response/code per activity.
+- `src/features/progress/` contains the versioned persistence boundary and v1/v2 normalization to v3. Progress v3 stores the current step, completed activity IDs, and saved response, code, or virtual project files per activity.
 - `src/components/ui/` contains small shadcn/ui-style primitives used by the app.
 - `e2e/` contains Playwright learner and responsive-layout coverage.
 - `docs/implementation-plan.md` records milestones and implementation decisions; `docs/lesson-authoring.md` documents the content model and author workflow.
@@ -61,6 +62,8 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 7. Run unit tests, lint, build, and Playwright; inspect desktop and tablet screenshots.
 
 The application shell derives stage navigation, progress, code restoration, and completion from the curriculum. A normal new lesson should require data and tests, not a new page or lesson-specific React branch. Adding a new interaction kind is a deliberate engine change: update the discriminated union, renderer, assessor (where appropriate), persistence normalization, and unit/browser tests together.
+
+When authoring a challenge, require a meaningful change to the code. If the goal is to inspect or reason about already-working code, use a prediction, trace, or choice activity instead. For file-workspace examples, see [Stage 11](src/curriculum/stages/stage-11.ts) and the [authoring guide](docs/lesson-authoring.md).
 
 ## Python input
 

@@ -1,6 +1,7 @@
 import type { ActivityProgress, LearnerResponse, Lesson } from '../../curriculum/types'
+import { normalizeVirtualFiles } from '../../lib/virtual-files'
 
-export const PROGRESS_VERSION = 2
+export const PROGRESS_VERSION = 3
 export const PROGRESS_STORAGE_KEY = 'python-steps:progress'
 
 export interface LearnerProgress {
@@ -120,7 +121,7 @@ export function normalizeProgress(value: unknown, lessons: Lesson[]): LearnerPro
   const initial = createInitialProgress(lessons)
   if (!isRecord(value)) return initial
   if (value.version === 1) return migrateV1(value, lessons)
-  if (value.version !== PROGRESS_VERSION) return initial
+  if (value.version !== 2 && value.version !== PROGRESS_VERSION) return initial
 
   const lessonsById = lessonById(lessons)
   const readyActivityIds = new Set<string>()
@@ -149,6 +150,9 @@ export function normalizeProgress(value: unknown, lessons: Lesson[]): LearnerPro
       if (!activity || !isRecord(state)) continue
       const normalized: ActivityProgress = {}
       if (activity.kind === 'code' && typeof state.code === 'string') normalized.code = state.code
+      if (activity.kind === 'file-workspace' && isRecord(state.files)) {
+        normalized.files = normalizeVirtualFiles(state.files)
+      }
       if (isLearnerResponse(state.response)) normalized.response = state.response
       if (typeof state.hintsRevealed === 'number' && Number.isInteger(state.hintsRevealed) && state.hintsRevealed >= 0) {
         normalized.hintsRevealed = Math.min(state.hintsRevealed, activity.hints?.length ?? 0)

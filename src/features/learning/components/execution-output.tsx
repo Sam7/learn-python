@@ -60,6 +60,7 @@ export function ExecutionOutput({ execution, isRunning, feedback, expectedRuntim
           </>
         )}
 
+        {execution?.workspaceWarning ? <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950" role="status">{execution.workspaceWarning}</p> : null}
         {feedback ? <div className="mt-3"><ActivityFeedback feedback={feedback} /></div> : null}
       </div>
     </section>

@@ -1,3 +1,5 @@
+import type { VirtualFileMap } from '../../../lib/virtual-files'
+
 export type PythonRunStatus = 'success' | 'error' | 'timeout' | 'cancelled'
 
 export type PythonInputMode = 'interactive' | 'transcript'
@@ -11,8 +13,14 @@ export interface PythonInputTranscriptEntry extends PythonInputRequest {
   answer: string
 }
 
+export interface PythonWorkspace {
+  entryFile: string
+  files: VirtualFileMap
+}
+
 export interface PythonRunRequest {
   code: string
+  workspace?: PythonWorkspace
   input?: {
     mode: PythonInputMode
     lines?: string[]
@@ -47,6 +55,8 @@ export interface PythonRunResult {
   traceFrames?: PythonTraceFrame[]
   error?: string
   durationMs: number
+  workspaceFiles?: VirtualFileMap
+  workspaceWarning?: string
 }
 
 export interface PythonRunHandlers {
