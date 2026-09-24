@@ -166,7 +166,7 @@ export function useLearningSession() {
   })
 
   const runActivity = async () => {
-    if (!activity || activity.kind === 'choice' || activity.kind === 'arrange-code' || activity.kind === 'reflection') return
+    if (!activity || activity.kind === 'choice' || activity.kind === 'arrange-code' || activity.kind === 'reflection' || activity.kind === 'planning') return
     if (runtimeStatus !== 'ready') return
 
     const currentActivity = activity
@@ -212,7 +212,7 @@ export function useLearningSession() {
   }
 
   const assessResponse = async (response: LearnerResponse) => {
-    if (!activity || activity.kind === 'code' || activity.kind === 'predict-output' || activity.kind === 'predict-state' || activity.kind === 'trace' || activity.kind === 'trace-table' || activity.kind === 'branch-trace' || activity.kind === 'reflection') return
+    if (!activity || (activity.kind !== 'choice' && activity.kind !== 'arrange-code' && activity.kind !== 'planning')) return
     const currentActivity = activity
     handleResponseChange(response)
     const result = await assessActivity(currentActivity, {

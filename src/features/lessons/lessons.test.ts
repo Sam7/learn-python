@@ -13,7 +13,7 @@ import {
   readyLessons,
   validateCurriculum,
 } from '../../curriculum/curriculum'
-import type { AstRequirement, CodeActivity, LearningActivity } from '../../curriculum/types'
+import type { AstRequirement, CodeActivity, LearningActivity, PlanningActivity } from '../../curriculum/types'
 import type { PythonRunResult } from '../python/python-runner/types'
 import { getAdvanceTarget, getStepProgress } from '../learning/domain/progression'
 import { assessActivity } from './validators/activity-validator'
@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first ten stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first eleven stages and leaves the final stage unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -141,9 +141,19 @@ describe('the canonical curriculum outline', () => {
       'Edge cases',
       'Fix one thing, test everything',
       'Refactor without changing behaviour',
+      'Understand through examples',
+      'Inputs → process → outputs',
+      'Describe the algorithm in ordinary language',
+      'Break the problem apart',
+      'Build one working slice',
+      'Function contracts before implementation',
+      'Choose representation before algorithm',
+      'Recognise existing algorithm patterns',
+      'Build from acceptance examples',
+      'First mostly-independent project',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(18)
-    expect(readyLessons).toHaveLength(91)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(8)
+    expect(readyLessons).toHaveLength(101)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -163,8 +173,11 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-7-lesson-10')?.title).toBe('The problem with parallel variables')
     expect(getNextCurriculumLesson('stage-8-lesson-8')?.title).toBe('Three fundamentally different failures')
     expect(getNextLesson('stage-8-lesson-8')?.title).toBe('Three fundamentally different failures')
-    expect(getNextCurriculumLesson('stage-9-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-9-lesson-10')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-9-lesson-10')?.status).toBe('ready')
+    expect(getNextCurriculumLesson('stage-9-lesson-10')?.title).toBe('Understand through examples')
+    expect(getNextLesson('stage-9-lesson-10')?.title).toBe('Understand through examples')
+    expect(getNextCurriculumLesson('stage-10-lesson-10')?.title).toBe('Libraries are reusable capabilities')
+    expect(getNextLesson('stage-10-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -183,6 +196,29 @@ describe('the canonical curriculum outline', () => {
     broken.stages[0].lessons[0].steps[0].activity!.required = false
     expect(validateCurriculum(broken)).toContain('Duplicate stage order: 0.')
     expect(validateCurriculum(broken)).toContain('Ready lesson saying-something needs at least one required activity.')
+  })
+
+  it('checks that planning activities have stable, labeled fields and at least one required section', () => {
+    const broken = structuredClone(curriculum)
+    const activity: PlanningActivity = {
+      id: 'invalid-plan',
+      kind: 'planning',
+      title: 'Invalid plan',
+      prompt: 'Write a plan.',
+      required: true,
+      fields: [
+        { id: 'same', label: 'Input', required: false, rows: 0 },
+        { id: 'same', label: ' ', required: false },
+      ],
+    }
+    broken.stages[0].lessons[0].steps[0].activity = activity
+
+    expect(validateCurriculum(broken)).toEqual(expect.arrayContaining([
+      'Planning activity invalid-plan needs an id and label for every field.',
+      'Planning activity invalid-plan cannot repeat a field id.',
+      'Planning activity invalid-plan needs at least one required field.',
+      'Planning activity invalid-plan field rows must be positive integers.',
+    ]))
   })
 
   it('derives stage completion and progression from required activity ids', () => {
@@ -405,6 +441,49 @@ describe('Stage 0 activity assessment', () => {
     }
     expect((await assessActivity(activity, { response: 'first', execution: success(''), runPython: noRun })).passed).toBe(true)
     expect((await assessActivity(activity, { response: 'last', execution: success(''), runPython: noRun })).passed).toBe(false)
+  })
+})
+
+describe('planning activity assessment', () => {
+  const activity: PlanningActivity = {
+    id: 'inputs-process-outputs',
+    kind: 'planning',
+    title: 'Plan first',
+    prompt: 'Write your current ideas.',
+    required: true,
+    fields: [
+      { id: 'inputs', label: 'Inputs', required: true },
+      { id: 'process', label: 'Process', required: true },
+      { id: 'outputs', label: 'Outputs', required: true },
+      { id: 'optional', label: 'Optional thought', required: false },
+    ],
+  }
+
+  it('accepts any non-empty learner-authored notes for required fields without interpreting their meaning', async () => {
+    await expect(assessActivity(activity, {
+      response: { inputs: 'a dragon', process: 'fly around', outputs: 'a story', optional: '' },
+      execution: success(''),
+      runPython: noRun,
+    })).resolves.toEqual({
+      passed: true,
+      message: 'Plan saved. These are your ideas; there is no single correct way to plan.',
+    })
+  })
+
+  it.each([
+    [undefined, 'Inputs'],
+    [{ inputs: '  ', process: 'calculate', outputs: 'total' }, 'Inputs'],
+    [{ inputs: 'numbers', process: '\n ', outputs: 'total' }, 'Process'],
+    [{ inputs: 'numbers', process: 'calculate', outputs: '' }, 'Outputs'],
+  ] as const)('keeps the plan incomplete when a required field is blank', async (response, missingLabel) => {
+    await expect(assessActivity(activity, {
+      response,
+      execution: success(''),
+      runPython: noRun,
+    })).resolves.toMatchObject({
+      passed: false,
+      message: `Add a note for “${missingLabel}” before saving your plan.`,
+    })
   })
 })
 

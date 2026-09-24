@@ -91,6 +91,24 @@ describe('progress persistence', () => {
     expect(progress.activityProgress[activity.id]?.response).toEqual(response)
   })
 
+  it('restores learner-authored planning fields without changing the progress schema', () => {
+    const activity = getLessonById('stage-10-lesson-2')!.steps[0].activity!
+    const response = {
+      input: 'the order amount',
+      process: 'compare with 50',
+      output: 'the delivery price',
+    }
+    const progress = normalizeProgress({
+      version: PROGRESS_VERSION,
+      currentLessonId: readyLessons[0].id,
+      completedActivityIds: [],
+      activityProgress: { [activity.id]: { response } },
+    }, allLessons)
+
+    expect(progress.version).toBe(PROGRESS_VERSION)
+    expect(progress.activityProgress[activity.id]?.response).toEqual(response)
+  })
+
   it('does not restore a coming-soon lesson as the active lesson', () => {
     const future = allLessons.find((lesson) => lesson.status === 'coming-soon')!
     const progress = normalizeProgress({

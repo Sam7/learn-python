@@ -207,4 +207,58 @@ describe('activity rendering', () => {
     expect(screen.getByText('This is for your own thinking. It is not graded.')).toBeVisible()
     expect(screen.queryByRole('button', { name: /check|submit|run/i })).not.toBeInTheDocument()
   })
+
+  it('saves planning fields as a learner-authored response without grading their meaning', () => {
+    const activity: LearningActivity = {
+      id: 'plan-the-program',
+      kind: 'planning',
+      title: 'Plan the program',
+      prompt: 'Write what you think the program needs.',
+      required: true,
+      fields: [
+        { id: 'input', label: 'Input', required: true },
+        { id: 'extra', label: 'Extra thought', required: false },
+      ],
+    }
+    const onResponseChange = vi.fn()
+    const onAssessResponse = vi.fn()
+
+    render(
+      <ActivityRenderer
+        activity={activity}
+        response={{ input: 'The player name', extra: '' }}
+        onResponseChange={onResponseChange}
+        onAssessResponse={onAssessResponse}
+        code=""
+        onCodeChange={vi.fn()}
+        onResetCode={vi.fn()}
+        onRun={vi.fn()}
+        isRunning={false}
+        runtimeReady
+        execution={null}
+        feedback={null}
+        hintsRevealed={0}
+        onRevealHint={vi.fn()}
+        onCompleteTrace={vi.fn()}
+        input={{
+          interactive: true,
+          transcriptValue: '',
+          onTranscriptChange: vi.fn(),
+          pendingRequest: null,
+          answerValue: '',
+          onAnswerChange: vi.fn(),
+          onSubmitAnswer: vi.fn(),
+          onCancelRun: vi.fn(),
+        }}
+      />,
+    )
+
+    const inputField = screen.getByRole('textbox', { name: /Input \(required\)/ })
+    fireEvent.change(inputField, { target: { value: 'The amount paid' } })
+    expect(onResponseChange).toHaveBeenCalledWith({ input: 'The amount paid', extra: '' })
+    expect(screen.getByRole('textbox', { name: /Extra thought \(optional\)/ })).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(onAssessResponse).toHaveBeenCalledWith({ input: 'The player name', extra: '' })
+    expect(screen.getByText('Your ideas are not graded. Fill each required section to save your plan.')).toBeVisible()
+  })
 })

@@ -10,10 +10,11 @@ import { stageSix } from './stages/stage-6'
 import { stageSeven } from './stages/stage-7'
 import { stageEight } from './stages/stage-8'
 import { stageNine } from './stages/stage-9'
+import { stageTen } from './stages/stage-10'
 
 const curriculumDefinition: Curriculum = {
   title: 'Python Steps',
-  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, stageFive, stageSix, stageSeven, stageEight, stageNine, ...futureStages],
+  stages: [stageZero, stageOne, stageTwo, stageThree, stageFour, stageFive, stageSix, stageSeven, stageEight, stageNine, stageTen, ...futureStages],
 }
 
 export function orderCurriculum(definition: Curriculum): Curriculum {
@@ -201,6 +202,24 @@ export function validateCurriculum(curriculumData: Curriculum): string[] {
             && order.every((id) => fragmentIds.includes(id))
           if (!validOrder(activity.startingOrder) || !validOrder(activity.correctOrder)) {
             issues.push(`Arrange-code activity ${activity.id} must order every fragment exactly once.`)
+          }
+        }
+        if (activity.kind === 'planning') {
+          const fieldIds = activity.fields.map((field) => field.id)
+          if (activity.fields.length === 0) {
+            issues.push(`Planning activity ${activity.id} needs one or more fields.`)
+          }
+          if (activity.fields.some((field) => !field.id.trim() || !field.label.trim())) {
+            issues.push(`Planning activity ${activity.id} needs an id and label for every field.`)
+          }
+          if (new Set(fieldIds).size !== fieldIds.length) {
+            issues.push(`Planning activity ${activity.id} cannot repeat a field id.`)
+          }
+          if (!activity.fields.some((field) => field.required)) {
+            issues.push(`Planning activity ${activity.id} needs at least one required field.`)
+          }
+          if (activity.fields.some((field) => field.rows !== undefined && (!Number.isInteger(field.rows) || field.rows < 1))) {
+            issues.push(`Planning activity ${activity.id} field rows must be positive integers.`)
           }
         }
       }

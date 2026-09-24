@@ -13,6 +13,7 @@ import type {
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
 import { resolveBranchPath } from '../../learning/domain/branch-trace'
 import { buildDebuggingAstCheck, getDebuggingAstMessage } from './debugging-ast'
+import { validatePlanningActivity } from './planning-validator'
 import { buildStructuredDataAstCheck, getStructuredDataAstMessage } from './structured-data-ast'
 
 export interface ActivityAssessmentContext {
@@ -1031,5 +1032,7 @@ export async function assessActivity(
       return validateBranchTrace(activity, context)
     case 'reflection':
       return { passed: false, message: 'This reflection is for your own thinking and is not graded.' }
+    case 'planning':
+      return validatePlanningActivity(activity, context.response)
   }
 }

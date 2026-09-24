@@ -21,6 +21,7 @@ import { ActivityFeedback } from './activity-feedback'
 import { ActivityHints } from './activity-hints'
 import { CompactCode } from './compact-code'
 import { ExecutionOutput } from './execution-output'
+import { PlanningActivityView } from './planning-activity'
 
 export interface ActivityRendererProps {
   activity: LearningActivity
@@ -63,6 +64,8 @@ export function ActivityRenderer(props: ActivityRendererProps) {
       return <BranchTraceView {...shared} activity={activity} />
     case 'reflection':
       return <ReflectionView {...shared} activity={activity} />
+    case 'planning':
+      return <PlanningActivityView {...shared} activity={activity} />
   }
 }
 

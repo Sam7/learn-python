@@ -956,7 +956,7 @@ test('Stage 9: diagnose, test, fix, and safely refactor through the chapter', as
   await page.locator('.cm-content').scrollIntoViewIfNeeded()
   await capture(page, testInfo, 'stage-9-refactor-desktop', false)
   await expect(page.getByRole('button', { name: /Debugging and Correctness Stage complete/ })).toContainText('10/10 ready')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Refactor without changing behaviour' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('show_result(8)')
@@ -997,6 +997,146 @@ test('Stage 9 assertion activity stays usable on iPad in both orientations @tabl
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Assertions' })).toBeVisible()
   await expect(page.locator('.cm-content')).toContainText('assert double(-2) == -4')
+})
+
+test('Stage 10: plan first, test working slices, and build from acceptance examples', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(300_000)
+  await openLesson(page, 'stage-10-lesson-1', 'notice-the-delivery-rule')
+  await expect(page.getByRole('heading', { name: 'Understand through examples' })).toBeVisible()
+
+  await page.getByRole('button', { name: '$49' }).click()
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await page.getByRole('button', { name: '$50' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Inputs → process → outputs' })).toBeVisible()
+  const inputPlan = page.getByRole('textbox', { name: /Input/ })
+  const processPlan = page.getByRole('textbox', { name: /Process/ })
+  await inputPlan.fill('The order total')
+  await processPlan.fill('Compare it with 50 and choose the delivery price')
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: /Input/ })).toHaveValue('The order total')
+  await expect(page.getByRole('textbox', { name: /Process/ })).toHaveValue('Compare it with 50 and choose the delivery price')
+  await page.getByRole('button', { name: 'Save plan' }).click()
+  await expect(page.getByRole('status')).toContainText('Add a note for “Output”')
+  await page.getByRole('textbox', { name: /Output/ }).fill('The delivery price')
+  await page.getByRole('button', { name: 'Save plan' }).click()
+  await expect(page.getByRole('status')).toContainText('Plan saved. These are your ideas')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Describe the algorithm in ordinary language' })).toBeVisible()
+  for (const [label, text] of [
+    ['First', 'Ask for the order total'],
+    ['Decision', 'Check if the total is at least 50'],
+    ['When the rule is true', 'Set delivery to 0'],
+    ['Otherwise', 'Set delivery to 5'],
+    ['Finish', 'Show the delivery price'],
+  ]) {
+    await page.getByRole('textbox', { name: new RegExp(label) }).fill(text)
+  }
+  await page.getByRole('button', { name: 'Save plan' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Break the problem apart' })).toBeVisible()
+  await page.getByRole('textbox', { name: /Jobs in the quiz/ }).fill('Ask a question\nCheck the answer\nUpdate the score\nShow the result')
+  await page.getByRole('button', { name: 'Save plan' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Build one working slice' })).toBeVisible()
+  await runUnchangedStarterAndExpectBlocked(page, ['7'])
+  await runAndExpectPass(page,
+    'answer = input("What is 3 + 4? ")\nscore = 0\nif answer == "7":\n    print("Correct!")\n    score = 1\nelse:\n    print("Try again.")\nprint(f"Score: {score}")',
+    ['7'],
+  )
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Function contracts before implementation' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('True\nFalse')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed True')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Choose representation before algorithm' })).toBeVisible()
+  await page.getByRole('button', { name: /Add question2/ }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: /Keep question records together/ }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('textbox', { name: 'Your reflection' }).fill('Keeping each answer with its question makes the list easier to extend.')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Recognise existing algorithm patterns' })).toBeVisible()
+  await page.getByRole('button', { name: /Best-so-far/ }).click()
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeDisabled()
+  await page.getByRole('button', { name: /Count-if/ }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Build from acceptance examples' })).toBeVisible()
+  await runUnchangedStarterAndExpectBlocked(page, ['3', '8', '5'])
+  await runAndExpectPass(page,
+    'first = int(input("First number: "))\nsecond = int(input("Second number: "))\nthird = int(input("Third number: "))\nnumbers = [first, second, third]\nlargest = numbers[0]\nfor number in numbers:\n    if number > largest:\n        largest = number\nprint(largest)',
+    ['3', '8', '5'],
+  )
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await expect(page.getByRole('heading', { name: 'First mostly-independent project' })).toBeVisible()
+  await runUnchangedStarterAndExpectBlocked(page)
+  const treasureExplorer = 'name = input("Name: ")\npoints = 0\nwhile True:\n    choice = input("Cave, river, or done? ")\n    if choice == "cave":\n        points = points + 2\n        print("Cave: 2 points")\n    elif choice == "river":\n        points = points + 1\n        print("River: 1 point")\n    elif choice == "done":\n        break\nprint(f"{name}: {points} points")'
+  await runAndExpectPass(page, treasureExplorer, ['Sam', 'cave', 'river', 'done'])
+  await page.locator('.cm-content').scrollIntoViewIfNeeded()
+  await capture(page, testInfo, 'stage-10-treasure-explorer-desktop', false)
+  await expect(page.getByRole('button', { name: /Designing Programs Stage complete/ })).toContainText('10/10 ready')
+  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'First mostly-independent project' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('elif choice == "river"')
+})
+
+test('Stage 10 planning fields remain usable and saved on iPad @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Stage 10 tablet coverage uses WebKit iPad projects.')
+  test.setTimeout(120_000)
+  const workerResponses: Array<{ url: string; headers: Record<string, string> }> = []
+  page.on('response', (response) => {
+    if (response.url().includes('python.worker')) {
+      workerResponses.push({ url: response.url(), headers: response.headers() })
+    }
+  })
+  await openLesson(page, 'stage-10-lesson-2', 'plan-delivery-cost')
+  await expect(page.getByRole('heading', { name: 'Inputs → process → outputs' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  await page.getByRole('textbox', { name: /Input/ }).fill('The order total')
+  await page.getByRole('textbox', { name: /Process/ }).fill('Compare it with the free-delivery threshold')
+  await page.getByRole('textbox', { name: /Output/ }).fill('The delivery cost')
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: /Input/ })).toHaveValue('The order total')
+  await expect(page.getByRole('textbox', { name: /Process/ })).toHaveValue('Compare it with the free-delivery threshold')
+  await expect(page.getByRole('textbox', { name: /Output/ })).toHaveValue('The delivery cost')
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+  expect(workerResponses.length).toBeGreaterThanOrEqual(2)
+  expect(workerResponses.at(-1)?.headers['cross-origin-resource-policy']).toBe('same-origin')
+  expect(workerResponses.at(-1)?.headers['cache-control']).toContain('no-store')
+  await verifyViewport(page)
+  await page.getByRole('button', { name: 'Save plan' }).click()
+  await expect(page.getByRole('status')).toContainText('Plan saved.')
+  await page.getByRole('button', { name: 'Next lesson' }).scrollIntoViewIfNeeded()
+  await expect(page.getByRole('button', { name: 'Next lesson' })).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-10-planning`)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('textbox', { name: /Input/ })).toHaveValue('The order total')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-10-planning`)
 })
 
 test('Stage 8 structured-record coding stays usable at iPad sizes @tablet', async ({ page, browserName }, testInfo) => {

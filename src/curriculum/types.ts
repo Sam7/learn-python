@@ -170,6 +170,22 @@ export interface ReflectionActivity extends ActivityBase {
   placeholder?: string
 }
 
+export interface PlanningField {
+  id: string
+  label: string
+  prompt?: string
+  placeholder?: string
+  required: boolean
+  rows?: number
+}
+
+/** A learner-owned planning response; completion checks that required sections are filled, not their meaning. */
+export interface PlanningActivity extends ActivityBase {
+  kind: 'planning'
+  fields: PlanningField[]
+  submitLabel?: string
+}
+
 export type LearningActivity =
   | CodeActivity
   | PredictOutputActivity
@@ -180,6 +196,7 @@ export type LearningActivity =
   | TraceTableActivity
   | BranchTraceActivity
   | ReflectionActivity
+  | PlanningActivity
 
 export interface LessonStep {
   id: string
