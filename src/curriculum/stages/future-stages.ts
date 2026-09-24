@@ -9,23 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 9,
-    title: 'Debugging and Correctness',
-    description: 'Use evidence, examples, and tests to find and fix problems.',
-    lessons: [
-      'Three fundamentally different failures',
-      'Read the error message',
-      'Expected versus actual',
-      'Trace before changing',
-      'Form a hypothesis',
-      'Make the problem smaller',
-      'Assertions',
-      'Edge cases',
-      'Fix one thing, test everything',
-      'Refactor without changing behaviour',
-    ],
-  },
-  {
     order: 10,
     title: 'Designing Programs',
     description: 'Plan from examples and build a program one useful slice at a time.',

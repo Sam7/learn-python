@@ -76,6 +76,8 @@ export type AstRequirement =
   | 'record-iteration'
   | 'record-filter'
   | 'record-total'
+  | 'multiple-assertions'
+  | 'reused-function'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }

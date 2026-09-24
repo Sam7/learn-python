@@ -12,6 +12,7 @@ import type {
 } from '../../../curriculum/types'
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
 import { resolveBranchPath } from '../../learning/domain/branch-trace'
+import { buildDebuggingAstCheck, getDebuggingAstMessage } from './debugging-ast'
 import { buildStructuredDataAstCheck, getStructuredDataAstMessage } from './structured-data-ast'
 
 export interface ActivityAssessmentContext {
@@ -91,6 +92,8 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
 }
 
 function pythonAstCheck(source: string, requirement: AstRequirement): string {
+  const debuggingCheck = buildDebuggingAstCheck(source, requirement)
+  if (debuggingCheck) return debuggingCheck
   const structuredDataCheck = buildStructuredDataAstCheck(source, requirement)
   if (structuredDataCheck) return structuredDataCheck
   const literal = JSON.stringify(source)
@@ -326,7 +329,6 @@ def adds_current_item(loop, item_name, counter_name):
 if not any(
     isinstance(loop, ast.For)
     and isinstance(loop.target, ast.Name)
-    and isinstance(loop.iter, ast.Name)
     and any(
         counter_name in zero_names
         and zero_names[counter_name] < loop.lineno
@@ -682,6 +684,8 @@ ${conceptCheck}
 }
 
 function astAssessmentMessage(requirement: AstRequirement, passed: boolean): string {
+  const debuggingMessage = getDebuggingAstMessage(requirement, passed)
+  if (debuggingMessage) return debuggingMessage
   const structuredDataMessage = getStructuredDataAstMessage(requirement, passed)
   if (structuredDataMessage) return structuredDataMessage
   if (passed) {

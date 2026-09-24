@@ -1,0 +1,492 @@
+import type { Stage } from '../types'
+
+const failureTypes = [
+  { id: 'syntax', text: 'Syntax — Python cannot understand the program yet.' },
+  { id: 'runtime', text: 'Runtime — the program runs into an impossible operation.' },
+  { id: 'logic', text: 'Logic — the program runs, but its answer is wrong.' },
+]
+
+const refactorStarter = `score = 8
+if score >= 5:
+    print("Pass")
+else:
+    print("Try again")
+
+score = 2
+if score >= 5:
+    print("Pass")
+else:
+    print("Try again")`
+
+export const stageNine: Stage = {
+  id: 'stage-9',
+  order: 9,
+  title: 'Debugging and Correctness',
+  description: 'Use evidence, examples, and tests to find and fix problems.',
+  lessons: [
+    {
+      id: 'stage-9-lesson-1',
+      order: 1,
+      title: 'Three fundamentally different failures',
+      shortTitle: 'Kinds of failure',
+      summary: 'A program can fail before it runs, while it runs, or by giving the wrong answer.',
+      learningGoal: 'Distinguish syntax, runtime, and logic failures before trying to fix them.',
+      conceptTags: ['debugging', 'syntax-error', 'runtime-error', 'logic-error'],
+      steps: [
+        {
+          id: 'recognise-syntax-failure',
+          content: [
+            { type: 'paragraph', text: 'Python must understand the writing before it can run any of it.' },
+            { type: 'example', code: 'print("Hello"' },
+          ],
+          activity: {
+            id: 'classify-syntax-failure',
+            kind: 'choice',
+            title: 'Classify the failure',
+            prompt: 'Which kind of failure happens when Python cannot understand the code?',
+            required: true,
+            options: failureTypes,
+            correctOptionId: 'syntax',
+            correctFeedback: 'Right — Python cannot run code it cannot understand.',
+            incorrectFeedback: 'Look at whether Python can understand this code before it starts running.',
+          },
+        },
+        {
+          id: 'recognise-runtime-failure',
+          content: [
+            { type: 'paragraph', text: 'This code is written correctly, but converting the word "cat" into a number cannot work.' },
+            { type: 'example', code: 'number = int("cat")' },
+          ],
+          activity: {
+            id: 'classify-runtime-failure',
+            kind: 'choice',
+            title: 'Classify the failure',
+            prompt: 'Python understands the code, starts running, and then hits an impossible operation. Which kind?',
+            required: true,
+            options: failureTypes,
+            correctOptionId: 'runtime',
+            correctFeedback: 'Yes — the problem happens while the program is running.',
+            incorrectFeedback: 'Python can read this code; the failure happens after it starts.',
+          },
+        },
+        {
+          id: 'recognise-logic-failure',
+          content: [
+            { type: 'paragraph', text: 'This program runs, but adding a price and a quantity is not how we calculate a total cost.' },
+            { type: 'example', code: 'price = 10\nquantity = 3\ntotal = price + quantity' },
+          ],
+          activity: {
+            id: 'classify-logic-failure',
+            kind: 'choice',
+            title: 'Classify the failure',
+            prompt: 'The program runs without an error but calculates the wrong answer. Which kind?',
+            required: true,
+            options: failureTypes,
+            correctOptionId: 'logic',
+            correctFeedback: 'Exactly — Python followed the instructions, but the instructions did not match the goal.',
+            incorrectFeedback: 'The program runs; the problem is the answer it calculates.',
+          },
+        },
+      ],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-2',
+      order: 2,
+      title: 'Read the error message',
+      shortTitle: 'Read the traceback',
+      summary: 'An error message gives clues about the kind of problem, its line, and the operation.',
+      learningGoal: 'Use a genuine traceback to identify the error type, line, operation, and values.',
+      conceptTags: ['debugging', 'traceback', 'runtime-error'],
+      steps: [
+        {
+          id: 'run-a-genuine-error',
+          content: [
+            { type: 'paragraph', text: 'Run this example and read Python’s real traceback. The goal is to inspect the error, not edit this code.' },
+            { type: 'list', items: ['First find the error type.', 'Then find the line and operation.', 'Finally notice the values involved.'] },
+          ],
+          activity: {
+            id: 'observe-value-error',
+            kind: 'code',
+            title: 'Inspect a real traceback',
+            prompt: 'Run the example. Python should show why it could not turn "cat" into a number.',
+            required: true,
+            starterCode: 'number = int("cat")',
+            assessment: { kind: 'runtime-error', exceptionName: 'ValueError' },
+          },
+        },
+        {
+          id: 'identify-error-type',
+          content: [{ type: 'paragraph', text: 'Start with the final line of the traceback. Its name tells you the kind of error.' }],
+          activity: {
+            id: 'find-value-error-name',
+            kind: 'choice',
+            title: 'Find the error type',
+            prompt: 'What error name does Python show for int("cat")?',
+            required: true,
+            options: [
+              { id: 'syntax', text: 'SyntaxError' },
+              { id: 'value', text: 'ValueError' },
+              { id: 'name', text: 'NameError' },
+            ],
+            correctOptionId: 'value',
+            correctFeedback: 'Right — the text is a value Python cannot convert to an integer.',
+            incorrectFeedback: 'Look at the error name on the last line of Python’s traceback.',
+          },
+        },
+        {
+          id: 'find-line-and-operation',
+          content: [{ type: 'paragraph', text: 'The traceback points to the line Python was running and the operation that could not finish.' }],
+          activity: {
+            id: 'find-error-operation',
+            kind: 'choice',
+            title: 'Find the operation',
+            prompt: 'Which operation caused this error?',
+            required: true,
+            options: [
+              { id: 'printing', text: 'Printing the number' },
+              { id: 'conversion', text: 'Converting the text "cat" with int()' },
+              { id: 'addition', text: 'Adding two numbers' },
+            ],
+            correctOptionId: 'conversion',
+            correctFeedback: 'Yes — int() tried to turn the text "cat" into a whole number.',
+            incorrectFeedback: 'Look at the function Python was trying to run on the line in the traceback.',
+          },
+        },
+      ],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-3',
+      order: 3,
+      title: 'Expected versus actual',
+      shortTitle: 'Expected and actual',
+      summary: 'Write down what should happen and what did happen before changing code.',
+      learningGoal: 'Compare expected and actual results and locate the first instruction that explains the difference.',
+      conceptTags: ['debugging', 'logic-error', 'evidence'],
+      steps: [{
+        id: 'compare-the-results',
+        content: [
+          { type: 'paragraph', text: 'The goal is to find delivery cost: $5 normally, but free for orders of $50 or more.' },
+          { type: 'example', code: 'order = 20\ndelivery = 5\ndelivery = order + delivery\nprint(delivery)' },
+          { type: 'list', items: ['Expected for an order of $20: 5', 'Actual from a buggy version: 25'] },
+        ],
+        activity: {
+          id: 'locate-first-difference',
+          kind: 'choice',
+          title: 'Find the first difference',
+          prompt: 'If the actual result is 25, which instruction should you inspect first?',
+          required: true,
+          options: [
+            { id: 'order', text: 'order = 20' },
+            { id: 'delivery', text: 'delivery = order + delivery' },
+            { id: 'print', text: 'print(delivery)' },
+          ],
+          correctOptionId: 'delivery',
+          correctFeedback: 'Good — the wrong value first appears where delivery is calculated.',
+          incorrectFeedback: 'Compare each instruction with the expected $5. Find where a new value first becomes wrong.',
+        },
+      }],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-4',
+      order: 4,
+      title: 'Trace before changing',
+      shortTitle: 'Trace before changing',
+      summary: 'Following values through a program can reveal a bug before any code is changed.',
+      learningGoal: 'Trace a changing value to find why a running total is overwritten instead of accumulated.',
+      conceptTags: ['debugging', 'trace', 'accumulator'],
+      steps: [
+        {
+          id: 'trace-the-bug',
+          content: [
+            { type: 'paragraph', text: 'Do not edit yet. Record total after each loop turn and compare it with the expected answer 12.' },
+            { type: 'example', code: 'total = 0\nfor number in [2, 4, 6]:\n    total = number\nprint(total)' },
+          ],
+          activity: {
+            id: 'trace-overwritten-total',
+            kind: 'trace-table',
+            title: 'Trace the changing total',
+            prompt: 'Enter total after line 3 runs on each turn. Then compare your table with Python’s real state.',
+            required: true,
+            code: 'total = 0\nfor number in [2, 4, 6]:\n    total = number\nprint(total)',
+            variables: ['total'],
+            checkpoints: [
+              { id: 'first-number', line: 3, occurrence: 1, label: 'after number 2' },
+              { id: 'second-number', line: 3, occurrence: 2, label: 'after number 4' },
+              { id: 'third-number', line: 3, occurrence: 3, label: 'after number 6' },
+            ],
+          },
+        },
+        {
+          id: 'repair-the-total',
+          content: [{ type: 'paragraph', text: 'The trace shows that total is replaced on every turn. Keep the old total and add the new number.' }],
+          activity: {
+            id: 'fix-the-running-total',
+            kind: 'code',
+            title: 'Fix the total update',
+            prompt: 'Change the loop so it keeps a running total. It should print 12.',
+            required: true,
+            starterCode: 'total = 0\nfor number in [2, 4, 6]:\n    total = number\nprint(total)',
+            assessment: {
+              kind: 'behavior',
+              cases: [{ inputs: [], output: { mode: 'exact', lines: ['12'] } }],
+              requirements: ['total-accumulator'],
+            },
+            hints: ['The current line forgets the previous total.', 'Add number to total and save the result back in total.'],
+          },
+        },
+      ],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-5',
+      order: 5,
+      title: 'Form a hypothesis',
+      shortTitle: 'Test a hypothesis',
+      summary: 'Use evidence to make a prediction, then choose an experiment that can check it.',
+      learningGoal: 'Choose an evidence-based explanation for a bug and test it with a useful example.',
+      conceptTags: ['debugging', 'hypothesis', 'testing'],
+      steps: [
+        {
+          id: 'choose-a-hypothesis',
+          content: [
+            { type: 'paragraph', text: 'The rule says 20 degrees is warm. The program printed "Cool" for 20 degrees.' },
+            { type: 'example', code: 'temperature = 20\nif temperature > 20:\n    print("Warm")\nelse:\n    print("Cool")' },
+          ],
+          activity: {
+            id: 'select-evidence-based-hypothesis',
+            kind: 'choice',
+            title: 'Choose a hypothesis',
+            prompt: 'Which idea best explains the result using evidence from the code?',
+            required: true,
+            options: [
+              { id: 'boundary-check', text: 'The > comparison excludes 20, even though the rule includes it.' },
+              { id: 'print-bug', text: 'Python cannot print the word "Cool".' },
+              { id: 'number-type', text: 'The number 20 is actually text.' },
+            ],
+            correctOptionId: 'boundary-check',
+            correctFeedback: 'That fits both clues: the rule includes 20, but > only includes numbers greater than 20.',
+            incorrectFeedback: 'Use the expected and actual results together with the comparison in the code.',
+          },
+        },
+        {
+          id: 'choose-an-experiment',
+          content: [{ type: 'paragraph', text: 'A useful experiment makes competing explanations predict different results.' }],
+          activity: {
+            id: 'choose-boundary-experiment',
+            kind: 'choice',
+            title: 'Choose a test value',
+            prompt: 'Which temperature best tests whether the boundary is the problem?',
+            required: true,
+            options: [
+              { id: 'below', text: '19 — below the boundary' },
+              { id: 'boundary', text: '20 — exactly at the boundary' },
+              { id: 'above', text: '21 — above the boundary' },
+            ],
+            correctOptionId: 'boundary',
+            correctFeedback: 'Exactly — > and >= behave differently at 20, so this test can distinguish them.',
+            incorrectFeedback: 'Choose a value where > and >= would give different answers.',
+          },
+        },
+        {
+          id: 'run-the-experiment',
+          content: [{ type: 'paragraph', text: 'Now predict what the current program prints at 20, then run the experiment.' }],
+          activity: {
+            id: 'predict-hypothesis-result',
+            kind: 'predict-output',
+            title: 'Test the hypothesis',
+            prompt: 'The code still uses >. What will it actually print for 20 degrees?',
+            required: true,
+            code: 'temperature = 20\nif temperature > 20:\n    print("Warm")\nelse:\n    print("Cool")',
+            expectedOutput: ['Cool'],
+          },
+        },
+      ],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-6',
+      order: 6,
+      title: 'Make the problem smaller',
+      shortTitle: 'Make a small example',
+      summary: 'A tiny example can reproduce a problem while leaving less state to follow.',
+      learningGoal: 'Select the smallest input that still demonstrates a running-total bug.',
+      conceptTags: ['debugging', 'minimal-example', 'accumulator'],
+      steps: [{
+        id: 'choose-a-small-reproduction',
+        content: [
+          { type: 'paragraph', text: 'A program processes ten numbers but prints only the last one instead of their sum.' },
+          { type: 'example', code: 'total = 0\nfor number in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:\n    total = number\nprint(total)' },
+          { type: 'paragraph', text: 'A smaller example is useful only if it still shows the same bug.' },
+        ],
+        activity: {
+          id: 'select-smallest-running-total-example',
+          kind: 'choice',
+          title: 'Choose a small reproduction',
+          prompt: 'Which is the smallest list that still shows the total being replaced instead of added?',
+          required: true,
+          options: [
+            { id: 'one-number', text: '[2] — expected 2, actual 2' },
+            { id: 'two-numbers', text: '[2, 4] — expected 6, actual 4' },
+            { id: 'three-numbers', text: '[2, 4, 6] — expected 12, actual 6' },
+          ],
+          correctOptionId: 'two-numbers',
+          correctFeedback: 'Yes — two numbers are enough to expose the overwrite bug; one number hides it.',
+          incorrectFeedback: 'Check which example still has different expected and actual totals.',
+        },
+      }],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-7',
+      order: 7,
+      title: 'Assertions',
+      shortTitle: 'Check what should be true',
+      summary: 'An assertion records a fact the program should satisfy for an example.',
+      learningGoal: 'Write assertions that check a function with ordinary, boundary, and negative inputs.',
+      conceptTags: ['debugging', 'assertion', 'testing'],
+      steps: [{
+        id: 'write-several-assertions',
+        content: [
+          { type: 'paragraph', text: 'An assert statement stops the program if a belief about the result is false.' },
+          { type: 'example', code: 'assert double(3) == 6\nassert double(0) == 0\nassert double(-2) == -4' },
+        ],
+        activity: {
+          id: 'test-double-with-assertions',
+          kind: 'code',
+          title: 'Check three examples',
+          prompt: 'Add an assert for 3, 0, and -2. If all three are correct, the final message will appear.',
+          required: true,
+          starterCode: 'def double(number):\n    return number * 2\n\n# Add three assert statements here\n\nprint("All three checks passed")',
+          assessment: {
+            kind: 'behavior',
+            cases: [{ inputs: [], output: { mode: 'exact', lines: ['All three checks passed'] } }],
+            requirements: ['multiple-assertions'],
+          },
+          hints: ['Use assert followed by a comparison.', 'For example: assert double(3) == 6. Add checks for 0 and -2 too.'],
+        },
+      }],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-8',
+      order: 8,
+      title: 'Edge cases',
+      shortTitle: 'Check the edges',
+      summary: 'Normal, boundary, unusual, and empty inputs can reveal different behavior.',
+      learningGoal: 'Recognise boundary and unusual test cases and plan a clear response to empty input.',
+      conceptTags: ['debugging', 'edge-case', 'testing'],
+      steps: [
+        {
+          id: 'recognise-boundary-cases',
+          content: [
+            { type: 'paragraph', text: 'For an average, a usual list, one item, and negative values are all useful tests.' },
+            { type: 'list', items: ['[4, 8] → 6 (normal)', '[8] → 8 (boundary: one item)', '[-4, 4] → 0 (unusual, but valid)'] },
+          ],
+          activity: {
+            id: 'identify-one-item-boundary',
+            kind: 'choice',
+            title: 'Spot the boundary case',
+            prompt: 'Which example checks the boundary of having only one number?',
+            required: true,
+            options: [
+              { id: 'normal', text: '[4, 8]' },
+              { id: 'boundary', text: '[8]' },
+              { id: 'unusual', text: '[-4, 4]' },
+            ],
+            correctOptionId: 'boundary',
+            correctFeedback: 'Right — one item is the smallest non-empty list for an average.',
+            incorrectFeedback: 'Look for the input with just one item.',
+          },
+        },
+        {
+          id: 'plan-for-empty-input',
+          content: [{ type: 'paragraph', text: 'An empty list is different: there is no number to average, and its length is zero.' }],
+          activity: {
+            id: 'choose-empty-list-policy',
+            kind: 'choice',
+            title: 'Plan for an empty list',
+            prompt: 'What should a careful program do before dividing by the number of items?',
+            required: true,
+            options: [
+              { id: 'check-empty', text: 'Check whether the list is empty and follow a clearly chosen policy.' },
+              { id: 'divide-anyway', text: 'Always divide by len(numbers), even when it is zero.' },
+              { id: 'discard-negative', text: 'Remove negative values because they are unusual.' },
+            ],
+            correctOptionId: 'check-empty',
+            correctFeedback: 'Exactly — make the empty-list behavior deliberate before calculating.',
+            incorrectFeedback: 'Think about what the program would divide by for an empty list.',
+          },
+        },
+      ],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-9',
+      order: 9,
+      title: 'Fix one thing, test everything',
+      shortTitle: 'Keep old tests passing',
+      summary: 'A fix must solve the new case without breaking cases that already worked.',
+      learningGoal: 'Fix a boundary bug and verify below, at, and above the threshold.',
+      conceptTags: ['debugging', 'regression', 'behavior-test'],
+      steps: [{
+        id: 'fix-the-boundary-with-regression-tests',
+        content: [
+          { type: 'paragraph', text: 'A passing score is 50 or higher. The starter gets scores below and above 50 right, but mishandles exactly 50.' },
+          { type: 'list', items: ['49 → Try again', '50 → Pass', '51 → Pass'] },
+        ],
+        activity: {
+          id: 'fix-score-boundary-and-keep-regressions',
+          kind: 'code',
+          title: 'Fix the threshold',
+          prompt: 'Make 50 pass, while keeping the results for 49 and 51 correct. Python checks all three cases.',
+          required: true,
+          starterCode: 'score = int(input("Score: "))\nif score > 50:\n    print("Pass")\nelse:\n    print("Try again")',
+          assessment: {
+            kind: 'behavior',
+            cases: [
+              { inputs: ['49'], requiredInputs: [{ inputIndex: 0, mustAppearInOutput: false }], output: { mode: 'exact', lines: ['Try again'] } },
+              { inputs: ['50'], requiredInputs: [{ inputIndex: 0, mustAppearInOutput: false }], output: { mode: 'exact', lines: ['Pass'] } },
+              { inputs: ['51'], requiredInputs: [{ inputIndex: 0, mustAppearInOutput: false }], output: { mode: 'exact', lines: ['Pass'] } },
+            ],
+          },
+          hints: ['Compare the expected result for 50 with the > symbol.', 'Use a comparison that includes 50, then keep all three test cases passing.'],
+        },
+      }],
+      status: 'ready',
+    },
+    {
+      id: 'stage-9-lesson-10',
+      order: 10,
+      title: 'Refactor without changing behaviour',
+      shortTitle: 'Improve without changing results',
+      summary: 'A refactor changes the code’s shape while keeping its observable behavior the same.',
+      learningGoal: 'Extract repeated decision logic into one function and preserve both results.',
+      conceptTags: ['debugging', 'refactor', 'function', 'behavior-test'],
+      steps: [{
+        id: 'extract-the-repeated-decision',
+        content: [
+          { type: 'paragraph', text: 'Both examples work. Refactoring means improving the structure without changing what the program does.' },
+          { type: 'example', code: 'def show_result(score):\n    if score >= 5:\n        print("Pass")\n    else:\n        print("Try again")\n\nshow_result(8)\nshow_result(2)' },
+        ],
+        activity: {
+          id: 'refactor-results-into-function',
+          kind: 'code',
+          title: 'Refactor the repeated code',
+          prompt: 'Create show_result(score) and call it for both scores. Keep the same two output lines.',
+          required: true,
+          starterCode: refactorStarter,
+          assessment: {
+            kind: 'behavior',
+            cases: [{ inputs: [], output: { mode: 'exact', lines: ['Pass', 'Try again'] } }],
+            requirements: ['function-definition', 'reused-function'],
+          },
+          hints: ['Put the if/else inside a function named show_result.', 'Call show_result(8) and show_result(2).'],
+        },
+      }],
+      status: 'ready',
+    },
+  ],
+}

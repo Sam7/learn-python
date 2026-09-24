@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first nine stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first ten stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -131,9 +131,19 @@ describe('the canonical curriculum outline', () => {
       'Nested information',
       'Choose the representation',
       'Build: leaderboard',
+      'Three fundamentally different failures',
+      'Read the error message',
+      'Expected versus actual',
+      'Trace before changing',
+      'Form a hypothesis',
+      'Make the problem smaller',
+      'Assertions',
+      'Edge cases',
+      'Fix one thing, test everything',
+      'Refactor without changing behaviour',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(28)
-    expect(readyLessons).toHaveLength(81)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(18)
+    expect(readyLessons).toHaveLength(91)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -151,8 +161,10 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-6-lesson-10')?.title).toBe('Total / accumulate')
     expect(getNextCurriculumLesson('stage-7-lesson-10')?.title).toBe('The problem with parallel variables')
     expect(getNextLesson('stage-7-lesson-10')?.title).toBe('The problem with parallel variables')
-    expect(getNextCurriculumLesson('stage-8-lesson-8')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-8-lesson-8')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-8-lesson-8')?.title).toBe('Three fundamentally different failures')
+    expect(getNextLesson('stage-8-lesson-8')?.title).toBe('Three fundamentally different failures')
+    expect(getNextCurriculumLesson('stage-9-lesson-10')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-9-lesson-10')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -819,9 +831,10 @@ describe('Stage 6 function AST requirements', () => {
   })
 })
 
-describe('Stage 7 reusable algorithm pattern AST requirements', () => {
+describe('Python AST requirements', () => {
   it.each([
     ['total-accumulator', 'adds_current_item', 'numbers = [4, 7, 2]\ntotal = 0\nfor number in numbers:\n    total = total + number\nprint(total)'],
+    ['total-accumulator', 'adds_current_item', 'total = 0\nfor number in [4, 7, 2]:\n    total = total + number\nprint(total)'],
     ['count-if', 'increments(node, counter_name)', 'scores = [4, 9, 2]\ncount = 0\nfor score in scores:\n    if score >= 7:\n        count = count + 1\nprint(count)'],
     ['search-flag', 'false_names', 'names = ["Mia", "Leo"]\nwanted = "Leo"\nfound = False\nfor name in names:\n    if name == wanted:\n        found = True\nprint(found)'],
     ['best-so-far', 'best_names', 'scores = [6, 3, 9, 7]\nbest = scores[0]\nfor score in scores:\n    if score > best:\n        best = score\nprint(best)'],
@@ -835,6 +848,8 @@ describe('Stage 7 reusable algorithm pattern AST requirements', () => {
     ['record-iteration', 'field.value.id == loop.target.id', 'students = [{"name": "Mia"}, {"name": "Leo"}]\nfor student in students:\n    print(student["name"])'],
     ['record-filter', 'record_fields(decision.test, loop.target.id)', 'students = [{"name": "Mia", "score": 88}, {"name": "Leo", "score": 72}]\nfor student in students:\n    if student["score"] >= 80:\n        print(student["name"])'],
     ['record-total', 'adds_record_value(loop, loop.target.id, total_name)', 'students = [{"score": 88}, {"score": 72}]\ntotal = 0\nfor student in students:\n    total = total + student["score"]\nprint(total)'],
+    ['multiple-assertions', 'len(assertions) < 3', 'def double(number):\n    return number * 2\nassert double(3) == 6\nassert double(0) == 0\nassert double(-2) == -4'],
+    ['reused-function', 'if len(calls) < 2:', 'def show_result(score):\n    print(score)\nshow_result(8)\nshow_result(2)'],
   ] satisfies Array<[AstRequirement, string, string]>)('checks %s as a Python AST pattern', async (requirement, pattern, code) => {
     const activity: CodeActivity = {
       id: `check-${requirement}`,

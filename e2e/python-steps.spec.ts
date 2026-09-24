@@ -22,10 +22,13 @@ async function setEditorCode(page: Page, code: string) {
   await expect(editor).toContainText(code.split('\n')[0])
 }
 
-async function runAndExpectPass(page: Page, code: string) {
+async function runAndExpectPass(page: Page, code: string, answers: string[] = []) {
   await waitForPython(page)
   await setEditorCode(page, code)
   await page.getByRole('button', { name: 'Run code' }).click()
+  for (let index = 0; index < answers.length; index += 1) {
+    await answerLivePrompt(page, answers[index], index + 1)
+  }
   await expect(page.getByRole('status')).toContainText('Great work', { timeout: 20_000 })
 }
 
@@ -793,9 +796,12 @@ test('Stage 7: algorithm patterns work across the full chapter and transfer to n
   })).toContain('long_words = long_words + 1')
 })
 
-async function runUnchangedStarterAndExpectBlocked(page: Page) {
+async function runUnchangedStarterAndExpectBlocked(page: Page, answers: string[] = []) {
   await waitForPython(page)
   await page.getByRole('button', { name: 'Run code' }).click()
+  for (let index = 0; index < answers.length; index += 1) {
+    await answerLivePrompt(page, answers[index], index + 1)
+  }
   await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: /Next (step|lesson|stage)/ })).toBeDisabled()
 }
@@ -869,15 +875,128 @@ test('Stage 8: records and representations work through the full leaderboard pro
   await page.locator('.cm-content').scrollIntoViewIfNeeded()
   await capture(page, testInfo, 'stage-8-leaderboard-desktop', false)
   await expect(page.getByRole('button', { name: /Representing Information Stage complete/ })).toContainText('8/8 ready')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'Three fundamentally different failures' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Build: leaderboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Three fundamentally different failures' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('python-steps:progress') ?? '{}') as {
       activityProgress?: Record<string, { code?: string }>
     }
     return saved.activityProgress?.['leaderboard-average-score']?.code
   })).toContain('total = total + player["score"]')
+})
+
+test('Stage 9: diagnose, test, fix, and safely refactor through the chapter', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(300_000)
+  await openLesson(page, 'stage-9-lesson-1', 'recognise-syntax-failure')
+  await expect(page.getByRole('heading', { name: 'Three fundamentally different failures' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Runtime — the program runs into an impossible operation.' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Syntax — Python cannot understand the program yet.' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'Runtime — the program runs into an impossible operation.' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'Logic — the program runs, but its answer is wrong.' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled({ timeout: 20_000 })
+  await expect(page.getByRole('region', { name: 'Python output' })).toContainText('ValueError')
+  await expect(page.getByRole('status')).toContainText('Good observation')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'ValueError' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'Converting the text "cat" with int()' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'delivery = order + delivery' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  for (const [label, value] of [['total after number 2', '2'], ['total after number 4', '4'], ['total after number 6', '6']]) {
+    await page.getByRole('textbox', { name: label }).fill(value)
+  }
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('matches the values Python had at every checkpoint')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'total = 0\nfor number in [2, 4, 6]:\n    total = total + number\nprint(total)')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'The > comparison excludes 20, even though the rule includes it.' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: '20 — exactly at the boundary' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('textbox', { name: 'Your output prediction' }).fill('Cool')
+  await page.getByRole('button', { name: 'Run and compare' }).click()
+  await expect(page.getByRole('status')).toContainText('Correct — Python printed Cool')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: '[2, 4] — expected 6, actual 4' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nassert double(3) == 6\nassert double(0) == 0\nassert double(-2) == -4\nprint("All three checks passed")')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: '[8]' }).click()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await page.getByRole('button', { name: 'Check whether the list is empty and follow a clearly chosen policy.' }).click()
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page, ['50'])
+  await runAndExpectPass(page, 'score = int(input("Score: "))\nif score >= 50:\n    print("Pass")\nelse:\n    print("Try again")', ['50'])
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'def show_result(score):\n    if score >= 5:\n        print("Pass")\n    else:\n        print("Try again")\n\nshow_result(8)\nshow_result(2)')
+  await page.locator('.cm-content').scrollIntoViewIfNeeded()
+  await capture(page, testInfo, 'stage-9-refactor-desktop', false)
+  await expect(page.getByRole('button', { name: /Debugging and Correctness Stage complete/ })).toContainText('10/10 ready')
+  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Refactor without changing behaviour' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('show_result(8)')
+})
+
+test('Stage 9 assertion activity stays usable on iPad in both orientations @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Stage 9 tablet coverage uses WebKit iPad projects.')
+  test.setTimeout(120_000)
+  await openLesson(page, 'stage-9-lesson-7', 'write-several-assertions')
+  await expect(page.getByRole('heading', { name: 'Assertions' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'def double(number):\n    return number * 2\n\nassert double(3) == 6\nassert double(0) == 0\nassert double(-2) == -4\nprint("All three checks passed")')
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  const output = page.getByRole('region', { name: 'Python output' })
+  await output.scrollIntoViewIfNeeded()
+  await expect(output).toContainText('All three checks passed')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-9-assertions`, false)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('heading', { name: 'Assertions' })).toBeVisible()
+  await output.scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-9-assertions`, false)
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Assertions' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('assert double(-2) == -4')
 })
 
 test('Stage 8 structured-record coding stays usable at iPad sizes @tablet', async ({ page, browserName }, testInfo) => {

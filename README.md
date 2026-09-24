@@ -41,7 +41,7 @@ The pinned Pyodide CDN URL is configured in `src/features/python/python.worker.t
 
 ## Project shape
 
-- `src/curriculum/` contains the typed Stage 0–11 curriculum outline from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons. Stages 0–8 (81 lessons) are fully available; later lessons remain structured as `coming-soon` data until authored and tested.
+- `src/curriculum/` contains the typed Stage 0–11 curriculum outline from `docs/curriculum-01.md`: 12 stages and 109 micro-lessons. Stages 0–9 (91 lessons) are fully available; later lessons remain structured as `coming-soon` data until authored and tested.
 - `src/features/learning/` renders generic activity types and owns the learner session/progression workflow. Lesson-specific rules stay in curriculum data and validation strategies.
 - `src/features/lessons/validators/` contains output, behavior, and Python-AST-backed code assessment.
 - `src/features/python/` contains the `PythonRunner` contract, worker protocol, browser runner, and runtime hook.
