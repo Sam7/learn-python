@@ -69,6 +69,13 @@ export type AstRequirement =
   | 'transform-list'
   | 'filter-list'
   | 'input-validation-loop'
+  | 'dictionary-literal'
+  | 'dictionary-field-read'
+  | 'dictionary-field-update'
+  | 'list-of-records'
+  | 'record-iteration'
+  | 'record-filter'
+  | 'record-total'
 
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }

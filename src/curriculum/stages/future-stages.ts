@@ -9,21 +9,6 @@ interface StageOutline {
 
 const outlines: StageOutline[] = [
   {
-    order: 8,
-    title: 'Representing Information',
-    description: 'Choose useful structures for information about one thing or many.',
-    lessons: [
-      'The problem with parallel variables',
-      'A record with named fields',
-      'Update a record',
-      'Many structured things',
-      'Query structured data',
-      'Nested information',
-      'Choose the representation',
-      'Build: leaderboard',
-    ],
-  },
-  {
     order: 9,
     title: 'Debugging and Correctness',
     description: 'Use evidence, examples, and tests to find and fix problems.',

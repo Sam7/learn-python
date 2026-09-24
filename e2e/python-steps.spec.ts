@@ -765,7 +765,7 @@ test('Stage 7: algorithm patterns work across the full chapter and transfer to n
     ['Search for a match', 'search until you find a match'],
   ] as const
   for (const [answer, feedback] of patternAnswers) {
-    await page.getByRole('button', { name: answer }).click()
+    await page.getByRole('button', { name: answer, exact: true }).click()
     await expect(page.getByRole('status')).toContainText(feedback)
     if (answer !== 'Search for a match') await page.getByRole('button', { name: 'Next step' }).click()
   }
@@ -780,15 +780,145 @@ test('Stage 7: algorithm patterns work across the full chapter and transfer to n
   await expect(page.getByText('These problems looked different, but each used the same count-if pattern.')).toBeVisible()
   await capture(page, testInfo, 'stage-7-pattern-transfer-desktop')
   await expect(page.getByRole('button', { name: /Reusable Algorithmic Patterns Stage complete/ })).toContainText('10/10 ready')
-  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next stage' }).click()
+  await expect(page.getByRole('heading', { name: 'The problem with parallel variables' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Pattern transfer' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'The problem with parallel variables' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('python-steps:progress') ?? '{}') as {
       activityProgress?: Record<string, { code?: string }>
     }
     return saved.activityProgress?.['transfer-count-to-word-lengths']?.code
   })).toContain('long_words = long_words + 1')
+})
+
+async function runUnchangedStarterAndExpectBlocked(page: Page) {
+  await waitForPython(page)
+  await page.getByRole('button', { name: 'Run code' }).click()
+  await expect(page.getByRole('button', { name: 'Run code' })).toBeEnabled({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: /Next (step|lesson|stage)/ })).toBeDisabled()
+}
+
+test('Stage 8: records and representations work through the full leaderboard project', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'The complete Python curriculum journey runs in Chromium.')
+  test.setTimeout(300_000)
+  await openLesson(page, 'stage-8-lesson-1', 'spot-related-values')
+  await expect(page.getByRole('heading', { name: 'The problem with parallel variables' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Three separate loops' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeDisabled()
+  await page.getByRole('button', { name: 'One record with named fields' }).click()
+  await expect(page.getByRole('button', { name: 'Next step' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'name = "Mia"\nage = 12\nscore = 88\nstudent = {"name": name, "age": age, "score": score}\nprint(student["name"])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'student = {"name": "Mia", "age": 12, "score": 88}\nprint(student["name"])\nprint(student["age"])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'student = {"name": "Mia", "age": 12, "score": 88}\nstudent["score"] = 91\nprint(student["score"])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'students = [{"name": "Mia", "score": 88}, {"name": "Leo", "score": 72}, {"name": "Ava", "score": 95}]\nfor student in students:\n    print(student["name"])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'students = [{"name": "Mia", "score": 88}, {"name": "Leo", "score": 72}, {"name": "Ava", "score": 95}]\nfor student in students:\n    if student["score"] >= 80:\n        print(student["name"])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  await page.getByRole('button', { name: 'A list of three numbers' }).click()
+  await expect(page.getByRole('status')).toContainText('Right — the square brackets hold a list')
+  await page.getByRole('button', { name: 'Next step' }).click()
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'player = {"name": "Nova", "scores": [8, 10, 7]}\nprint(player["scores"][1])')
+  await page.getByRole('button', { name: 'Next lesson' }).click()
+
+  const representationAnswers = [
+    ['represent-five-temperatures', 'A list'],
+    ['represent-one-person', 'A dictionary'],
+    ['represent-a-class', 'A list of dictionaries'],
+    ['represent-a-shopping-cart', 'A list of dictionaries'],
+  ] as const
+  for (let index = 0; index < representationAnswers.length; index += 1) {
+    const [, answer] = representationAnswers[index]
+    const nextLabel = index === representationAnswers.length - 1 ? 'Next lesson' : 'Next step'
+    await page.getByRole('button', { name: answer, exact: true }).click()
+    await expect(page.getByRole('button', { name: nextLabel })).toBeEnabled()
+    await page.getByRole('button', { name: nextLabel }).click()
+  }
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'players = [{"name": "Nova", "score": 84}, {"name": "Pixel", "score": 93}, {"name": "Echo", "score": 76}]\nfor player in players:\n    print(player["name"], player["score"])')
+  await page.getByRole('button', { name: 'Next step' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'players = [{"name": "Nova", "score": 84}, {"name": "Pixel", "score": 93}, {"name": "Echo", "score": 76}]\nbest = players[0]\nfor player in players:\n    if player["score"] > best["score"]:\n        best = player\nprint(best["name"])')
+  await page.getByRole('button', { name: 'Next step' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'players = [{"name": "Nova", "score": 84}, {"name": "Pixel", "score": 93}, {"name": "Echo", "score": 76}]\ncount = 0\nfor player in players:\n    if player["score"] > 80:\n        count = count + 1\nprint(count)')
+  await page.getByRole('button', { name: 'Next step' }).click()
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  await runAndExpectPass(page, 'players = [{"name": "Nova", "score": 84}, {"name": "Pixel", "score": 93}, {"name": "Echo", "score": 76}]\ntotal = 0\nfor player in players:\n    total = total + player["score"]\naverage = total / len(players)\nprint(average)')
+  await page.locator('.cm-content').scrollIntoViewIfNeeded()
+  await capture(page, testInfo, 'stage-8-leaderboard-desktop', false)
+  await expect(page.getByRole('button', { name: /Representing Information Stage complete/ })).toContainText('8/8 ready')
+  await expect(page.getByRole('button', { name: 'Next stage coming soon' })).toBeDisabled()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Build: leaderboard' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('python-steps:progress') ?? '{}') as {
+      activityProgress?: Record<string, { code?: string }>
+    }
+    return saved.activityProgress?.['leaderboard-average-score']?.code
+  })).toContain('total = total + player["score"]')
+})
+
+test('Stage 8 structured-record coding stays usable at iPad sizes @tablet', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'webkit', 'Stage 8 tablet coverage uses WebKit iPad projects.')
+  test.setTimeout(120_000)
+  await openLesson(page, 'stage-8-lesson-5', 'find-students-over-eighty')
+  await expect(page.getByRole('heading', { name: 'Query structured data' })).toBeVisible()
+  await expect(page.getByTestId('sticky-action-bar')).toHaveAttribute('data-runtime-status', 'ready', { timeout: 60_000 })
+
+  await runUnchangedStarterAndExpectBlocked(page)
+  const solution = 'students = [{"name": "Mia", "score": 88}, {"name": "Leo", "score": 72}, {"name": "Ava", "score": 95}]\nfor student in students:\n    if student["score"] >= 80:\n        print(student["name"])'
+  await runAndExpectPass(page, solution)
+
+  const initialOrientation = testInfo.project.name.includes('landscape') ? 'landscape' : 'portrait'
+  const initialWidth = initialOrientation === 'landscape' ? 1194 : 834
+  expect(await page.evaluate(() => window.innerWidth)).toBe(initialWidth)
+  await verifyViewport(page)
+  if (initialOrientation === 'portrait') await expect(page.getByRole('button', { name: 'Open curriculum' })).toBeVisible()
+  const output = page.getByRole('region', { name: 'Python output' })
+  await output.scrollIntoViewIfNeeded()
+  await expect(output).toContainText('Mia')
+  await expect(output).toContainText('Ava')
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${initialOrientation}-stage-8-record-filter`, false)
+
+  const rotatedOrientation = initialOrientation === 'landscape' ? 'portrait' : 'landscape'
+  const rotatedViewport = rotatedOrientation === 'portrait'
+    ? { width: 834, height: 1194 }
+    : { width: 1194, height: 834 }
+  await page.setViewportSize(rotatedViewport)
+  expect(await page.evaluate(() => window.innerWidth)).toBe(rotatedViewport.width)
+  await verifyViewport(page)
+  await expect(page.getByRole('heading', { name: 'Query structured data' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('student["score"] >= 80')
+  await output.scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('sticky-action-bar')).toBeVisible()
+  await capture(page, testInfo, `ipad-${rotatedOrientation}-stage-8-record-filter`, false)
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Query structured data' })).toBeVisible()
+  await expect(page.locator('.cm-content')).toContainText('student["score"] >= 80')
 })
 
 test('invalid Python and runaway code show useful feedback and recover', async ({ page, browserName }) => {

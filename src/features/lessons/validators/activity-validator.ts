@@ -12,6 +12,7 @@ import type {
 } from '../../../curriculum/types'
 import type { PythonRunRequest, PythonRunResult, PythonTraceValue } from '../../python/python-runner/types'
 import { resolveBranchPath } from '../../learning/domain/branch-trace'
+import { buildStructuredDataAstCheck, getStructuredDataAstMessage } from './structured-data-ast'
 
 export interface ActivityAssessmentContext {
   response?: LearnerResponse
@@ -90,6 +91,8 @@ function validateOutputActivity(activity: CodeActivity, stdout: string): Validat
 }
 
 function pythonAstCheck(source: string, requirement: AstRequirement): string {
+  const structuredDataCheck = buildStructuredDataAstCheck(source, requirement)
+  if (structuredDataCheck) return structuredDataCheck
   const literal = JSON.stringify(source)
 const conceptCheck = requirement === 'comparison' ? `
 if not any(isinstance(node, ast.Compare) for node in ast.walk(tree)):
@@ -679,8 +682,10 @@ ${conceptCheck}
 }
 
 function astAssessmentMessage(requirement: AstRequirement, passed: boolean): string {
+  const structuredDataMessage = getStructuredDataAstMessage(requirement, passed)
+  if (structuredDataMessage) return structuredDataMessage
   if (passed) {
-    const messages: Record<AstRequirement, string> = {
+    const messages: Partial<Record<AstRequirement, string>> = {
       'text-variable': 'Great work — you created and used a text variable.',
       'variable-in-sentence': 'Great work — your sentence uses the text value.',
       'named-value': 'Great work — you gave a value a name and used it.',
@@ -718,10 +723,10 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
       'filter-list': 'Great work — you kept only items that passed the test.',
       'input-validation-loop': 'Great work — your program asks again until the value is acceptable.',
     }
-    return messages[requirement]
+    return messages[requirement] ?? 'Great work — you used the Python idea from this task.'
   }
 
-  const messages: Record<AstRequirement, string> = {
+  const messages: Partial<Record<AstRequirement, string>> = {
     'text-variable': 'Create a variable containing text, then use its name in your program.',
     'variable-in-sentence': 'Put your text variable inside a sentence that you print.',
     'named-value': 'Give a value a name, then use that name in print().',
@@ -759,7 +764,7 @@ function astAssessmentMessage(requirement: AstRequirement, passed: boolean): str
     'filter-list': 'Keep a separate list, then append an item only when it passes the if test.',
     'input-validation-loop': 'Ask again for the value being checked inside the while loop.',
   }
-  return messages[requirement]
+  return messages[requirement] ?? 'Try using the Python idea described in the task.'
 }
 
 async function validateCodeActivity(

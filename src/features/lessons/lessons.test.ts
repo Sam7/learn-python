@@ -48,7 +48,7 @@ describe('the canonical curriculum outline', () => {
     expect(allLessons).toHaveLength(109)
   })
 
-  it('publishes the fully authored first eight stages and leaves later curriculum unavailable', () => {
+  it('publishes the fully authored first nine stages and leaves later curriculum unavailable', () => {
     expect(readyLessons.map((lesson) => lesson.title)).toEqual([
       'Make something happen',
       'Instructions happen in order',
@@ -123,9 +123,17 @@ describe('the canonical curriculum outline', () => {
       'Validate / repeat until acceptable',
       'Recognise the pattern',
       'Pattern transfer',
+      'The problem with parallel variables',
+      'A record with named fields',
+      'Update a record',
+      'Many structured things',
+      'Query structured data',
+      'Nested information',
+      'Choose the representation',
+      'Build: leaderboard',
     ])
-    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(36)
-    expect(readyLessons).toHaveLength(73)
+    expect(allLessons.filter((lesson) => lesson.status === 'coming-soon')).toHaveLength(28)
+    expect(readyLessons).toHaveLength(81)
     expect(getLessonLocation('saying-something')?.stage.id).toBe('stage-0')
     expect(getLessonById('stage-11-lesson-8')?.title).toBe('Independent capstone')
     expect(getNextCurriculumLesson('first-tiny-creation')?.title).toBe('Values')
@@ -141,8 +149,10 @@ describe('the canonical curriculum outline', () => {
     expect(getNextLesson('stage-5-lesson-9')?.title).toBe('You have been using functions all along')
     expect(getNextCurriculumLesson('stage-6-lesson-10')?.title).toBe('Total / accumulate')
     expect(getNextLesson('stage-6-lesson-10')?.title).toBe('Total / accumulate')
-    expect(getNextCurriculumLesson('stage-7-lesson-10')?.status).toBe('coming-soon')
-    expect(getNextLesson('stage-7-lesson-10')).toBeUndefined()
+    expect(getNextCurriculumLesson('stage-7-lesson-10')?.title).toBe('The problem with parallel variables')
+    expect(getNextLesson('stage-7-lesson-10')?.title).toBe('The problem with parallel variables')
+    expect(getNextCurriculumLesson('stage-8-lesson-8')?.status).toBe('coming-soon')
+    expect(getNextLesson('stage-8-lesson-8')).toBeUndefined()
   })
 
   it('derives navigation and ordering from stage and lesson order values', () => {
@@ -818,6 +828,13 @@ describe('Stage 7 reusable algorithm pattern AST requirements', () => {
     ['transform-list', 'empty_list_names', 'numbers = [1, 2, 3]\ndoubled = []\nfor number in numbers:\n    doubled.append(number * 2)\nprint(doubled)'],
     ['filter-list', 'decision.body', 'scores = [4, 9, 2]\nhigh_scores = []\nfor score in scores:\n    if score >= 7:\n        high_scores.append(score)\nprint(high_scores)'],
     ['input-validation-loop', 'loop.test', 'age = int(input("Age: "))\nwhile age < 0:\n    age = int(input("Try again: "))\nprint(age)'],
+    ['dictionary-literal', 'isinstance(node.value, ast.Dict)', 'student = {"name": "Mia", "age": 12}\nprint(student["name"])'],
+    ['dictionary-field-read', 'isinstance(node.ctx, ast.Load)', 'student = {"name": "Mia"}\nprint(student["name"])'],
+    ['dictionary-field-update', 'isinstance(node.ctx, ast.Store)', 'student = {"score": 88}\nstudent["score"] = 91\nprint(student["score"])'],
+    ['list-of-records', 'len(node.value.elts) >= 2', 'students = [{"name": "Mia"}, {"name": "Leo"}]\nprint(students)'],
+    ['record-iteration', 'field.value.id == loop.target.id', 'students = [{"name": "Mia"}, {"name": "Leo"}]\nfor student in students:\n    print(student["name"])'],
+    ['record-filter', 'record_fields(decision.test, loop.target.id)', 'students = [{"name": "Mia", "score": 88}, {"name": "Leo", "score": 72}]\nfor student in students:\n    if student["score"] >= 80:\n        print(student["name"])'],
+    ['record-total', 'adds_record_value(loop, loop.target.id, total_name)', 'students = [{"score": 88}, {"score": 72}]\ntotal = 0\nfor student in students:\n    total = total + student["score"]\nprint(total)'],
   ] satisfies Array<[AstRequirement, string, string]>)('checks %s as a Python AST pattern', async (requirement, pattern, code) => {
     const activity: CodeActivity = {
       id: `check-${requirement}`,
