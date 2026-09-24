@@ -21,6 +21,7 @@ export type OutputExpectation =
   | { mode: 'exact'; lines: string[] }
   | { mode: 'contains'; values: string[] }
   | { mode: 'line-count'; count: number }
+  | { mode: 'non-empty-line-count'; count: number }
   | { mode: 'distinct-lines'; count: number }
   | { mode: 'integer-range'; minimum: number; maximum: number }
   | { mode: 'non-empty' }
@@ -98,13 +99,20 @@ export type AstRequirement =
   | 'file-not-found-handler'
   | 'local-module-import'
 
+/** A narrowly configured AST check for concepts that need named operands. */
+export type AstCheck = AstRequirement | {
+  kind: 'operation-uses-names'
+  operation: 'multiply'
+  names: [string, string]
+}
+
 export type CodeAssessment =
   | { kind: 'output'; expectation: OutputExpectation; rejectExact?: string[] }
-  | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstRequirement }
+  | { kind: 'output-and-ast'; expectation: OutputExpectation; requirement: AstCheck }
   | {
       kind: 'behavior'
       cases: BehaviorTestCase[]
-      requirements?: AstRequirement[]
+      requirements?: AstCheck[]
       fileRequirements?: Array<{ path: string; requirements: AstRequirement[] }>
     }
   | { kind: 'successful-run'; requireOutput?: boolean }

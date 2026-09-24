@@ -421,6 +421,26 @@ describe('Stage 0 activity assessment', () => {
     expect(result.evidence).toEqual({ expected: 'First\nSecond\nThird', actual: 'Third\nSecond\nFirst' })
   })
 
+  it('requires three meaningful, non-empty introduction lines', async () => {
+    const activity = getLessonById('first-tiny-creation')!.steps[0].activity!
+    if (activity.kind !== 'code') throw new Error('Expected an editable introduction activity')
+
+    const blankOutput = await assessActivity(activity, {
+      code: activity.starterCode,
+      execution: success('My name is Byte\n\n\n'),
+      runPython: noRun,
+    })
+    expect(blankOutput.passed).toBe(false)
+    expect(blankOutput.evidence?.expected).toBe('3 non-empty output lines')
+
+    const completeOutput = await assessActivity(activity, {
+      code: 'print("My name is Byte")\nprint("I live on Mars")\nprint("I like pancakes")',
+      execution: success('My name is Byte\nI live on Mars\nI like pancakes\n'),
+      runPython: noRun,
+    })
+    expect(completeOutput.passed).toBe(true)
+  })
+
   it('checks line ordering as data and rejects malformed ordering definitions', async () => {
     const activity = getLessonById('instructions-in-order')!.steps[1].activity!
     expect(activity.kind).toBe('arrange-code')
@@ -472,20 +492,22 @@ describe('Stage 0 activity assessment', () => {
     })).passed).toBe(true)
   })
 
-  it('treats blank rows as real output lines for the exact-three-line creation task', async () => {
+  it('does not count blank rows as completed introduction lines', async () => {
     const activity = getLessonById('first-tiny-creation')!.steps[0].activity!
-    expect((await assessActivity(activity, {
+    const blankLine = await assessActivity(activity, {
       code: 'print("A")\nprint()\nprint("C")',
       execution: success('A\n\nC\n'),
       runPython: noRun,
-    })).passed).toBe(true)
+    })
+    expect(blankLine.passed).toBe(false)
+    expect(blankLine.evidence?.expected).toBe('3 non-empty output lines')
     const tooShort = await assessActivity(activity, {
       code: 'print("A")\nprint("B")',
       execution: success('A\nB\n'),
       runPython: noRun,
     })
     expect(tooShort.passed).toBe(false)
-    expect(tooShort.evidence?.expected).toBe('3 output lines')
+    expect(tooShort.evidence?.expected).toBe('3 non-empty output lines')
   })
 
   it('uses the real worker trace contract for step-through activities', async () => {
@@ -577,6 +599,35 @@ describe('Stage 0 activity assessment', () => {
     }
     expect((await assessActivity(activity, { response: 'first', execution: success(''), runPython: noRun })).passed).toBe(true)
     expect((await assessActivity(activity, { response: 'last', execution: success(''), runPython: noRun })).passed).toBe(false)
+  })
+})
+
+describe('named multiplication assessment', () => {
+  it('requires both specified names inside the same multiplication AST', async () => {
+    const activity = getLessonById('stage-2-lesson-3')!.steps.find((step) => step.activity?.id === 'name-price-and-quantity')!.activity!
+    if (activity.kind !== 'code') throw new Error('Expected an editable code activity')
+
+    let generatedCheck = ''
+    const incomplete = await assessActivity(activity, {
+      code: 'price = 12\nquantity = 4\nprint(price * 4)',
+      execution: success('48\n'),
+      runPython: async (request) => {
+        generatedCheck = request.code
+        return { ...success(''), status: 'error', error: 'AssertionError: missing a named multiplication operand' }
+      },
+    })
+    expect(incomplete.passed).toBe(false)
+    expect(incomplete.message).toContain('price and quantity')
+    expect(generatedCheck).toContain('ast.Mult')
+    expect(generatedCheck).toContain('"price"')
+    expect(generatedCheck).toContain('"quantity"')
+
+    const complete = await assessActivity(activity, {
+      code: 'price = 12\nquantity = 4\nprint(price * quantity)',
+      execution: success('48\n'),
+      runPython: noRun,
+    })
+    expect(complete.passed).toBe(true)
   })
 })
 

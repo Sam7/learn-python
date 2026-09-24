@@ -1,5 +1,6 @@
 import type {
   ArrangeCodeActivity,
+  AstCheck,
   AstRequirement,
   BranchTraceActivity,
   CodeActivity,
@@ -56,6 +57,9 @@ function expectationMatches(expectation: OutputExpectation, stdout: string): boo
   }
   const lines = outputLines(stdout)
   if (expectation.mode === 'line-count') return lines.length === expectation.count
+  if (expectation.mode === 'non-empty-line-count') {
+    return lines.filter((line) => line.trim().length > 0).length === expectation.count
+  }
   if (expectation.mode === 'distinct-lines') {
     const values = lines.map((line) => line.trim())
     return values.length === expectation.count && values.every(Boolean) && new Set(values).size === expectation.count
@@ -73,6 +77,7 @@ function expectationDescription(expectation: OutputExpectation): string {
   if (expectation.mode === 'exact') return expectation.lines.join('\n')
   if (expectation.mode === 'contains') return `Output includes: ${expectation.values.join(', ')}`
   if (expectation.mode === 'line-count') return `${expectation.count} output line${expectation.count === 1 ? '' : 's'}`
+  if (expectation.mode === 'non-empty-line-count') return `${expectation.count} non-empty output line${expectation.count === 1 ? '' : 's'}`
   if (expectation.mode === 'distinct-lines') return `${expectation.count} different non-empty output lines`
   if (expectation.mode === 'integer-range') return `A whole number from ${expectation.minimum} to ${expectation.maximum}`
   return 'some non-empty output'
@@ -170,7 +175,12 @@ function localPythonModuleNames(files: VirtualFileMap | undefined): string[] {
     .map((path) => path.slice(path.lastIndexOf('/') + 1, -3))
 }
 
-function pythonAstCheck(source: string, requirement: AstRequirement, localModuleNames: string[] = []): string {
+function pythonAstCheck(source: string, requirement: AstCheck, localModuleNames: string[] = []): string {
+  if (typeof requirement !== 'string') {
+    const names = JSON.stringify(requirement.names)
+    const operation = requirement.operation === 'multiply' ? 'ast.Mult' : 'None'
+    return `import ast\nsource = ${JSON.stringify(source)}\ntree = ast.parse(source)\nrequired_names = set(${names})\nif not any(\n    isinstance(node, ast.BinOp)\n    and isinstance(node.op, ${operation})\n    and required_names.issubset({child.id for child in ast.walk(node) if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)})\n    for node in ast.walk(tree)\n):\n    raise AssertionError("Use both named values in the same multiplication.")\n`
+  }
   const realWorldCheck = buildRealWorldAstCheck(source, requirement, localModuleNames)
   if (realWorldCheck) return realWorldCheck
   const debuggingCheck = buildDebuggingAstCheck(source, requirement)
@@ -764,7 +774,12 @@ ${conceptCheck}
 `
 }
 
-function astAssessmentMessage(requirement: AstRequirement, passed: boolean): string {
+function astAssessmentMessage(requirement: AstCheck, passed: boolean): string {
+  if (typeof requirement !== 'string') {
+    return passed
+      ? 'Great work — both named values are part of the multiplication.'
+      : `Use ${requirement.names[0]} and ${requirement.names[1]} in the same multiplication.`
+  }
   const realWorldMessage = getRealWorldAstMessage(requirement, passed)
   if (realWorldMessage) return realWorldMessage
   const debuggingMessage = getDebuggingAstMessage(requirement, passed)
