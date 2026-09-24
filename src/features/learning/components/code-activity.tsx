@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react'
+import { Play, RotateCcw } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import type { CodeActivity, ValidationResult } from '../../../curriculum/types'
 import type { PythonInputRequest, PythonRunResult } from '../../python/python-runner/types'
@@ -56,21 +56,27 @@ export function CodeActivityView({
           <h2 className="text-base font-bold text-ink">{activity.title}</h2>
           <p className="mt-1 text-sm leading-5 text-muted">{activity.prompt}</p>
         </div>
-        <Button type="button" variant="quiet" size="sm" className="min-h-10 shrink-0" onClick={onReset} disabled={isRunning}>
-          <RotateCcw size={14} aria-hidden="true" /> Reset code
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button type="button" variant="quiet" size="sm" className="min-h-10 shrink-0" onClick={onReset} disabled={isRunning}>
+            <RotateCcw size={14} aria-hidden="true" /> Reset code
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="min-h-10 shrink-0 bg-teal px-4 text-white hover:bg-teal/90 focus-visible:ring-teal"
+            onClick={onRun}
+            disabled={isRunning || !runtimeReady}
+          >
+            {!isRunning ? <Play size={15} fill="currentColor" aria-hidden="true" /> : null}
+            {isRunning ? 'Running…' : 'Run code'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(250px,0.85fr)]">
         <div className="min-w-0 rounded-xl border border-line bg-[#142321] p-2">
           <label htmlFor="python-editor" className="sr-only">Your Python code</label>
           <div id="python-editor"><CodeEditor value={code} onChange={onCodeChange} /></div>
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1 pt-2">
-            <Button type="button" size="sm" className="min-h-10 px-4" onClick={onRun} disabled={isRunning || !runtimeReady}>
-              {isRunning ? 'Running…' : 'Run code'}
-            </Button>
-            <span className="text-[11px] text-mist/70">Running checks your answer.</span>
-          </div>
           {input.interactive ? null : (
             <div className="mt-2 rounded-lg bg-paper p-2 text-ink">
               <InputPanel {...input} />
